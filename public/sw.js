@@ -1,4 +1,4 @@
-const CACHE = 'debut-offline-v14'
+const CACHE = 'debut-offline-v15'
 const CORE = [
   './', './index.html', './manifest.webmanifest',
   './assets/app.js', './assets/app.css',

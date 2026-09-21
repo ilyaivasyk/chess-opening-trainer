@@ -119,9 +119,10 @@ section { margin-bottom: 26px; }
 
 .coach-card { min-height: 142px; margin-bottom: 14px; padding: 17px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(140deg, rgba(216, 182, 106, .08), var(--surface)); }
 .mode-pill { display: inline-block; margin-bottom: 10px; padding: 4px 8px; border-radius: 999px; color: var(--gold); background: rgba(216, 182, 106, .1); font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-.coach-card h2 { margin: 0 0 8px; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; }
+.coach-card h2 { min-height: 58px; margin: 0 0 8px; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; line-height: 1.2; }
 .coach-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.coach-card .feedback { min-height: 36px; margin-top: 9px; color: var(--cream); }
+.coach-card .coach-copy { height: 54px; overflow-y: auto; }
+.coach-card .feedback { height: 36px; margin-top: 9px; overflow-y: auto; color: var(--cream); }
 
 .board-wrap { width: 100%; margin: 0 0 12px; }
 

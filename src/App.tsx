@@ -553,9 +553,15 @@ function App() {
       <section className="coach-card">
         <span className="mode-pill">{screen === 'rating' ? `Суперник ${strength === 3000 ? 'MAX' : strength} · аналіз MAX · ${playerColor === 'w' ? 'білі' : 'чорні'}` : modes.find((item) => item.id === mode)?.name}</span>
         <h2>{screen === 'rating' ? (ratingResult ? 'Рівень визначено' : ratingStage === 'between' ? 'Половина оцінювання готова' : 'Грай без підказок') : freePlay ? 'Мітельшпіль' : current?.title ?? 'Дебют завершено'}</h2>
-        {screen === 'rating' && ratingStage === 'playing' && <p>Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.</p>}
-        {screen !== 'rating' && mode === 'coach' && current && !freePlay && <p>{current.explanation}</p>}
-        {screen !== 'rating' && mode === 'exam' && !freePlay && <p>Зіграй дебют самостійно. Результат побачиш після завершення.</p>}
+        <p className="coach-copy">
+          {screen === 'rating' && ratingStage === 'playing'
+            ? 'Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.'
+            : screen !== 'rating' && mode === 'coach' && current && !freePlay
+              ? current.explanation
+              : screen !== 'rating' && mode === 'exam' && !freePlay
+                ? 'Зіграй дебют самостійно. Результат побачиш після завершення.'
+                : '\u00a0'}
+        </p>
         <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
       </section>
 

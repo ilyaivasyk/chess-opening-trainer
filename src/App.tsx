@@ -49,7 +49,16 @@ type GameMoveRecord = {
   to: Square
   fenBefore: string
   fenAfter: string
+  bookMove: boolean
+  openingName: string
   openingNote?: string
+}
+
+type MoveBadge = {
+  square: Square
+  symbol: string
+  label: string
+  tone: 'theory' | 'brilliant' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'departure'
 }
 
 type AnalysedMove = GameMoveRecord & {
@@ -147,6 +156,63 @@ function moveParts(uci: string) {
   return { from: uci.slice(0, 2) as Square, to: uci.slice(2, 4) as Square, promotion: uci[4] }
 }
 
+function buildOpeningBook() {
+  const book = new Set<string>()
+  const scenarios = [...italian.scenarios, ...italian.blackScenarios] as Scenario[]
+  for (const scenario of scenarios) {
+    const position = new Chess()
+    const add = (uci: string) => {
+      book.add(`${position.fen()}|${uci}`)
+      const move = moveParts(uci)
+      position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+    }
+    if (scenario.initialMove) add(scenario.initialMove)
+    for (const step of scenario.steps) {
+      add(step.userMove)
+      add(step.opponentMove)
+    }
+  }
+  return book
+}
+
+const openingBook = buildOpeningBook()
+
+function detectOpening(moves: string[]) {
+  const starts = (...line: string[]) => line.every((move, index) => moves[index] === move)
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6')) return 'Італійська партія: захист двох коней'
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5')) {
+    if (moves.includes('c2c3') && moves.includes('d2d3')) return 'Італійська партія: Джоко-Піанісимо'
+    return 'Італійська партія: Джоко-Піано'
+  }
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4')) return 'Італійська партія'
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6')) return 'Відкрита гра: захист конем c6'
+  if (starts('e2e4', 'e7e5')) return 'Відкрита гра'
+  if (starts('e2e4')) return 'Дебют королівського пішака'
+  return 'Дебют не визначено'
+}
+
+function badgeForAnalysis(move: AnalysedMove): MoveBadge {
+  if (move.bookMove) return { square: move.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
+  const badges: Record<AnalysedMove['label'], Omit<MoveBadge, 'square'>> = {
+    'Блискучий': { symbol: '!!', label: 'Блискучий', tone: 'brilliant' },
+    'Найкращий': { symbol: '★', label: 'Найкращий', tone: 'great' },
+    'Чудовий': { symbol: '!', label: 'Чудовий', tone: 'great' },
+    'Добрий': { symbol: '✓', label: 'Добрий', tone: 'good' },
+    'Неточність': { symbol: '?!', label: 'Неточність', tone: 'inaccuracy' },
+    'Помилка': { symbol: '?', label: 'Помилка', tone: 'mistake' },
+    'Груба помилка': { symbol: '??', label: 'Груба помилка', tone: 'blunder' },
+  }
+  return { square: move.to, ...badges[move.label] }
+}
+
+function badgePosition(square: Square, orientation: PlayerColor): CSSProperties {
+  const file = square.charCodeAt(0) - 97
+  const rank = Number(square[1]) - 1
+  const column = orientation === 'w' ? file : 7 - file
+  const row = orientation === 'w' ? 7 - rank : rank
+  return { left: `${column * 12.5 + 7.5}%`, top: `${row * 12.5 + .7}%` }
+}
+
 function moveLabel(cpLoss: number, bestMove: string | null, playedMove: string, san: string): AnalysedMove['label'] {
   if (cpLoss <= 5 && bestMove === playedMove && /[x+#]/.test(san)) return 'Блискучий'
   if (cpLoss <= 10) return 'Найкращий'
@@ -196,6 +262,7 @@ function App() {
   const [selected, setSelected] = useState<Square | null>(null)
   const [legalTargets, setLegalTargets] = useState<Square[]>([])
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null)
+  const [moveBadge, setMoveBadge] = useState<MoveBadge | null>(null)
   const [feedback, setFeedback] = useState('')
   const [thinking, setThinking] = useState(false)
   const [freePlay, setFreePlay] = useState(false)
@@ -218,7 +285,8 @@ function App() {
   const playerSide = screen === 'rating' ? playerColor : trainingColor
   const gameFinished = Boolean(manualOutcome) || game.current.isGameOver()
   const analysedMove = analysisItems[analysisIndex]
-  const displayedFen = analysisOpen && analysedMove ? analysedMove.fenBefore : fen
+  const displayedFen = analysisOpen && analysedMove ? analysedMove.fenAfter : fen
+  const displayedBadge = analysisOpen && analysedMove ? badgeForAnalysis(analysedMove) : moveBadge
 
   useEffect(() => {
     engine.current = new StockfishEngine()
@@ -246,6 +314,7 @@ function App() {
     setSelected(null)
     setLegalTargets([])
     setLastMove(null)
+    setMoveBadge(null)
     setManualOutcome(null)
     setAnalysisOpen(false)
     setAnalysisBusy(false)
@@ -256,16 +325,19 @@ function App() {
   }
 
   function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: string) {
+    const uci = `${played.from}${played.to}${played.promotion ?? ''}`
     gameHistory.current.push({
       ply: gameHistory.current.length + 1,
       actor,
       color: played.color,
       san: played.san,
-      uci: `${played.from}${played.to}${played.promotion ?? ''}`,
+      uci,
       from: played.from,
       to: played.to,
       fenBefore: beforeFen,
       fenAfter: game.current.fen(),
+      bookMove: openingBook.has(`${beforeFen}|${uci}`),
+      openingName: detectOpening([...gameHistory.current.map((move) => move.uci), uci]),
       openingNote,
     })
   }
@@ -403,11 +475,15 @@ function App() {
     setFen(game.current.fen())
 
     const uci = `${played.from}${played.to}${played.promotion ?? ''}`
+    const isBookMove = openingBook.has(`${beforeFen}|${uci}`)
     if (screen === 'rating') {
       recordMove(beforeFen, played, 'player')
       void evaluateRatingMove(beforeFen, game.current.fen())
       return true
     }
+    setMoveBadge(isBookMove
+      ? { square: played.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
+      : { square: played.to, symbol: '↗', label: 'Поза варіантом', tone: 'departure' })
     if (freePlay || !current) {
       recordMove(beforeFen, played, 'player', openingIdeaNote(beforeFen, game.current.fen(), trainingColor))
       if (game.current.isGameOver()) {
@@ -423,7 +499,7 @@ function App() {
       if (mode === 'exam') {
         recordMove(beforeFen, played, 'player', `Відхилення від вивченого плану: очікувався хід ${current.userMove}. ${current.explanation}`)
         setFreePlay(true)
-        setFeedback('')
+        setFeedback('↗ Це вихід із вивченого варіанта. Після партії Stockfish покаже, чи хід нормальний, чи він послабив дебютний план.')
         void requestEngineMove()
         return true
       }
@@ -431,6 +507,7 @@ function App() {
       game.current.undo()
       setFen(game.current.fen())
       setLastMove(null)
+      setMoveBadge(null)
       setFeedback(mode === 'coach'
         ? `Спробуй інакше. Ідея зараз: ${current.explanation}`
         : 'Це легальний хід, але він відхиляється від поточного дебютного варіанта.')
@@ -438,7 +515,7 @@ function App() {
     }
 
     recordMove(beforeFen, played, 'player')
-    if (mode !== 'exam') setFeedback(`Правильно. ${current.explanation}`)
+    if (mode !== 'exam') setFeedback(`📖 Теорія · ${detectOpening(gameHistory.current.map((move) => move.uci))}. ${current.explanation}`)
     setThinking(true)
     const session = gameSession.current
     window.setTimeout(() => {
@@ -578,6 +655,7 @@ function App() {
     setSelected(null)
     setLegalTargets([])
     setLastMove(null)
+    setMoveBadge(null)
     setFeedback(`Повтори ідею: ${scenario.steps[previousStep].explanation}`)
   }
 
@@ -808,7 +886,7 @@ function App() {
           {analysisOpen
             ? analysisBusy
               ? `Stockfish перевіряє кожну позицію: ${analysisProgress}%.`
-              : 'Переглядай партію хід за ходом. Золотиста стрілка — зіграний хід, зелена — кращий хід Stockfish.'
+              : 'Переглядай партію хід за ходом. Значок стоїть на фігурі, яка щойно зробила хід.'
             : screen === 'rating' && ratingStage === 'playing'
             ? 'Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.'
             : screen !== 'rating' && mode === 'coach' && current && !freePlay
@@ -829,14 +907,7 @@ function App() {
           lightSquareStyle: { backgroundColor: '#d8cfb6' },
           darkSquareStyle: { backgroundColor: '#6f8b7e' },
           squareStyles,
-          arrows: analysisOpen && analysedMove
-            ? [
-              { startSquare: analysedMove.from, endSquare: analysedMove.to, color: 'rgba(239,190,77,.9)' },
-              ...(analysedMove.bestMove && analysedMove.bestMove !== analysedMove.uci
-                ? [{ startSquare: moveParts(analysedMove.bestMove).from, endSquare: moveParts(analysedMove.bestMove).to, color: 'rgba(92,190,132,.9)' }]
-                : []),
-            ]
-            : hint ? [{ startSquare: hint.from, endSquare: hint.to, color: 'rgba(239,190,77,.82)' }] : [],
+          arrows: !analysisOpen && hint ? [{ startSquare: hint.from, endSquare: hint.to, color: 'rgba(239,190,77,.82)' }] : [],
           animationDurationInMs: 120,
           allowDrawingArrows: false,
           canDragPiece: ({ piece }) => {
@@ -848,6 +919,9 @@ function App() {
           },
           onSquareClick: ({ square }) => chooseSquare(square as Square),
         }} />
+        {displayedBadge && (
+          <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} title={displayedBadge.label} aria-label={displayedBadge.label}>{displayedBadge.symbol}</div>
+        )}
       </section>
 
       <section className="game-controls">
@@ -894,16 +968,29 @@ function App() {
             <>
               <div className="move-timeline">
                 {analysisItems.map((item, index) => (
-                  <button className={`${analysisIndex === index ? 'active' : ''} ${qualityClass(item.label)}`} onClick={() => setAnalysisIndex(index)} key={`${item.ply}-${item.uci}`}>{item.san}</button>
+                  <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => setAnalysisIndex(index)} key={`${item.ply}-${item.uci}`}>{item.san}</button>
                 ))}
               </div>
               <div className="move-review">
-                <span className={`quality ${qualityClass(analysedMove.label)}`}>{analysedMove.label}</span>
+                <div className="review-tags">
+                  {analysedMove.bookMove && <span className="quality theory">📖 Теорія</span>}
+                  {!analysedMove.bookMove && <span className={`quality ${qualityClass(analysedMove.label)}`}>{badgeForAnalysis(analysedMove).symbol} {analysedMove.label}</span>}
+                </div>
                 <h3>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</h3>
-                <p>{analysedMove.cpLoss <= 10
+                <p className="opening-name">{analysedMove.openingName}</p>
+                <p>{analysedMove.bookMove
+                  ? 'Книжковий хід у цьому вивченому варіанті. Інший вибір Stockfish не робить його помилкою.'
+                  : analysedMove.cpLoss <= 10
                   ? 'Хід зберігає найкращу оцінку позиції.'
                   : `Втрата оцінки: приблизно ${(analysedMove.cpLoss / 100).toFixed(1)} пішака.`}</p>
-                {analysedMove.bestMove && analysedMove.bestMove !== analysedMove.uci && <p className="best-move">Stockfish радить: <strong>{analysedMove.bestMove}</strong></p>}
+                {!analysedMove.bookMove && analysedMove.bestMove && analysedMove.bestMove !== analysedMove.uci && <p className="best-move">Stockfish радить: <strong>{analysedMove.bestMove}</strong></p>}
+                {!analysedMove.bookMove && analysedMove.openingNote?.startsWith('Відхилення') && (
+                  <p className={`departure-verdict ${analysedMove.cpLoss <= 60 ? 'safe' : 'harmful'}`}>
+                    {analysedMove.cpLoss <= 60
+                      ? '↗ Вихід із теорії, але хід не псує позицію.'
+                      : '⚠ Вихід із теорії послабив дебютний план.'}
+                  </p>
+                )}
                 {analysedMove.openingNote && <p className="opening-note">♟ {analysedMove.openingNote}</p>}
               </div>
               <div className="analysis-navigation">

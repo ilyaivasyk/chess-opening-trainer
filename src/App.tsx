@@ -794,7 +794,7 @@ function App() {
     return (
       <main className="shell home">
         <header className="game-hero">
-          <div className="brand-mark">♞</div>
+          <div className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon-192-v4.png`} alt="" /></div>
           <div><span className="eyebrow">Шаховий тренер</span><h1>Дебют</h1></div>
           <div className="rating-badge"><small>Рівень</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
         </header>
@@ -839,9 +839,9 @@ function App() {
                 )
               })}
               </div>
-              <div className="side-choice" aria-label="Сторона в дебюті">
-                <button className={trainingColor === 'w' ? 'active' : ''} onClick={() => setTrainingColor('w')}><span>♙</span><strong>Грати білими</strong><small>Будувати атаку</small></button>
-                <button className={trainingColor === 'b' ? 'active' : ''} onClick={() => setTrainingColor('b')}><span>♟</span><strong>Захищатися чорними</strong><small>Нейтралізувати тиск</small></button>
+              <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label="Сторона в дебюті">
+                {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>Грати білими</strong><small>Будувати атаку</small></button>}
+                {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>Захищатися чорними</strong><small>Нейтралізувати тиск</small></button>}
               </div>
             </>
           ) : <div className="empty-category"><span>♙</span><strong>Курси готуються</strong><p>Тут з’являться дебюти для цього рівня.</p></div>}

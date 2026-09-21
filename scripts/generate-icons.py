@@ -4,9 +4,9 @@ from pathlib import Path
 
 
 def png(path: str, size: int) -> None:
-    svg = Path(__file__).resolve().parent.parent / 'public' / 'icon.svg'
+    source = Path(__file__).resolve().parent.parent / 'assets' / 'app-icon-source.png'
     subprocess.run(
-        ['rsvg-convert', '--width', str(size), '--height', str(size), '--output', path, str(svg)],
+        ['sips', '-z', str(size), str(size), str(source), '--out', path],
         check=True,
     )
 

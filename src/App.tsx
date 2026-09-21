@@ -264,6 +264,8 @@ function App() {
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null)
   const [moveBadge, setMoveBadge] = useState<MoveBadge | null>(null)
   const [feedback, setFeedback] = useState('')
+  const [practiceCorrection, setPracticeCorrection] = useState(false)
+  const [practiceDeviation, setPracticeDeviation] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [freePlay, setFreePlay] = useState(false)
   const [mistakes, setMistakes] = useState<string[]>([])
@@ -281,7 +283,7 @@ function App() {
 
   const current = scenario.steps[step]
   const progress = Math.min(100, Math.round((step / scenario.steps.length) * 100))
-  const hint = screen === 'train' && mode === 'coach' && current ? moveParts(current.userMove) : null
+  const hint = screen === 'train' && current && (mode === 'coach' || practiceCorrection) ? moveParts(current.userMove) : null
   const playerSide = screen === 'rating' ? playerColor : trainingColor
   const gameFinished = Boolean(manualOutcome) || game.current.isGameOver()
   const analysedMove = analysisItems[analysisIndex]
@@ -315,6 +317,8 @@ function App() {
     setLegalTargets([])
     setLastMove(null)
     setMoveBadge(null)
+    setPracticeCorrection(false)
+    setPracticeDeviation(false)
     setManualOutcome(null)
     setAnalysisOpen(false)
     setAnalysisBusy(false)
@@ -360,8 +364,12 @@ function App() {
       styles[lastMove.from] = { backgroundColor: 'rgba(236,198,85,.35)' }
       styles[lastMove.to] = { backgroundColor: 'rgba(236,198,85,.35)' }
     }
+    if (practiceCorrection && hint) {
+      styles[hint.from] = { boxShadow: 'inset 0 0 0 5px #efbe4d' }
+      styles[hint.to] = { background: 'radial-gradient(circle, rgba(239,190,77,.95) 0 24%, rgba(239,190,77,.28) 26% 48%, transparent 50%)' }
+    }
     return styles
-  }, [selected, legalTargets, lastMove])
+  }, [selected, legalTargets, lastMove, practiceCorrection, hint])
 
   function start() {
     const source = trainingColor === 'w' ? italian.scenarios : italian.blackScenarios
@@ -481,10 +489,8 @@ function App() {
       void evaluateRatingMove(beforeFen, game.current.fen())
       return true
     }
-    setMoveBadge(isBookMove
-      ? { square: played.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
-      : { square: played.to, symbol: '↗', label: 'Поза варіантом', tone: 'departure' })
     if (freePlay || !current) {
+      setMoveBadge(null)
       recordMove(beforeFen, played, 'player', openingIdeaNote(beforeFen, game.current.fen(), trainingColor))
       if (game.current.isGameOver()) {
         setFeedback(gameResultText(game.current, null))
@@ -493,6 +499,10 @@ function App() {
       void requestEngineMove()
       return true
     }
+
+    setMoveBadge(isBookMove
+      ? { square: played.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
+      : { square: played.to, symbol: '↗', label: 'Поза варіантом', tone: 'departure' })
 
     if (uci !== current.userMove) {
       setMistakes((items) => [...items, `${played.san} замість ${current.userMove}`])
@@ -504,23 +514,33 @@ function App() {
         return true
       }
 
+      if (mode === 'practice') {
+        recordMove(beforeFen, played, 'player', `Відхилення від вивченого плану: очікувався хід ${current.userMove}. ${current.explanation}`)
+        setPracticeCorrection(false)
+        setPracticeDeviation(true)
+        setFeedback(`↗ ${played.san} — легальний хід, але він виходить із поточного дебютного варіанта.`)
+        return true
+      }
+
       game.current.undo()
       setFen(game.current.fen())
       setLastMove(null)
       setMoveBadge(null)
+      setPracticeCorrection(false)
       setFeedback(mode === 'coach'
         ? `Спробуй інакше. Ідея зараз: ${current.explanation}`
-        : 'Це легальний хід, але він відхиляється від поточного дебютного варіанта.')
+        : `Хід повернуто. Правильний напрямок підсвічено на дошці. ${current.explanation}`)
       return false
     }
 
+    setPracticeCorrection(false)
     recordMove(beforeFen, played, 'player')
     if (mode !== 'exam') setFeedback(`📖 Теорія · ${detectOpening(gameHistory.current.map((move) => move.uci))}. ${current.explanation}`)
     setThinking(true)
     const session = gameSession.current
     window.setTimeout(() => {
       if (session === gameSession.current) playCourseReply(current)
-    }, 500)
+    }, mode === 'practice' ? 900 : 500)
     return true
   }
 
@@ -600,6 +620,7 @@ function App() {
     const played = game.current.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' })
     recordMove(beforeFen, played, 'course')
     setLastMove({ from: reply.from, to: reply.to })
+    setMoveBadge(null)
     setFen(game.current.fen())
     setThinking(false)
 
@@ -613,7 +634,30 @@ function App() {
     }
 
     setStep(next)
-    if (mode === 'coach') setFeedback(lesson.opponentExplanation)
+    if (mode !== 'exam') setFeedback(lesson.opponentExplanation)
+  }
+
+  function undoPracticeDeviation() {
+    if (mode !== 'practice' || !practiceDeviation || thinking) return
+    game.current.undo()
+    gameHistory.current.pop()
+    setFen(game.current.fen())
+    setLastMove(null)
+    setMoveBadge(null)
+    setPracticeDeviation(false)
+    setPracticeCorrection(true)
+    setSelected(null)
+    setLegalTargets([])
+    setFeedback(`Хід повернуто. Правильний маршрут підсвічено. ${current?.explanation ?? ''}`)
+  }
+
+  function continuePracticeDeviation() {
+    if (mode !== 'practice' || !practiceDeviation || thinking) return
+    setPracticeDeviation(false)
+    setPracticeCorrection(false)
+    setFreePlay(true)
+    setFeedback('Гра продовжується нестандартно проти Stockfish.')
+    void requestEngineMove()
   }
 
   async function requestEngineMove(engineStrength = strength, ratingGame = false) {
@@ -630,6 +674,7 @@ function App() {
         const played = game.current.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
         recordMove(beforeFen, played, 'engine')
         setLastMove({ from: move.from, to: move.to })
+        setMoveBadge(null)
         setFen(game.current.fen())
       }
       setThinking(false)
@@ -656,6 +701,8 @@ function App() {
     setLegalTargets([])
     setLastMove(null)
     setMoveBadge(null)
+    setPracticeCorrection(false)
+    setPracticeDeviation(false)
     setFeedback(`Повтори ідею: ${scenario.steps[previousStep].explanation}`)
   }
 
@@ -879,9 +926,10 @@ function App() {
 
       {screen !== 'rating' && <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>}
 
-      <section className="coach-card">
+      <section className={`coach-card ${screen !== 'rating' && mode === 'practice' ? 'practice-mode' : ''}`}>
         <span className="mode-pill">{screen === 'rating' ? `Суперник ${strength === 3000 ? 'MAX' : strength} · аналіз MAX · ${playerColor === 'w' ? 'білі' : 'чорні'}` : `${modes.find((item) => item.id === mode)?.name} · ${trainingColor === 'w' ? 'білі' : 'чорні'}`}</span>
         <h2>{analysisOpen ? 'Повний аналіз партії' : screen === 'rating' ? (ratingResult ? 'Рівень визначено' : ratingStage === 'between' ? 'Половина оцінювання готова' : 'Грай без підказок') : gameFinished ? gameResultText(game.current, manualOutcome) : freePlay ? 'Мітельшпіль' : current?.title ?? 'Дебют завершено'}</h2>
+        <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
         <p className="coach-copy">
           {analysisOpen
             ? analysisBusy
@@ -895,8 +943,27 @@ function App() {
                 ? 'Зіграй дебют самостійно. Результат побачиш після завершення.'
                 : '\u00a0'}
         </p>
-        <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
       </section>
+
+      {screen === 'train' && mode === 'practice' && practiceDeviation && current && (
+        <section className="practice-correction" aria-live="assertive">
+          <strong>Відхилення від дебюту</strong>
+          <p>Хід залишився на дошці. За вивченим варіантом очікувався хід <b>{current.userMove.slice(0, 2)}</b> → <b>{current.userMove.slice(2, 4)}</b>.</p>
+          <small>{current.explanation}</small>
+          <div className="deviation-actions">
+            <button className="secondary" onClick={undoPracticeDeviation}>← Повернути хід</button>
+            <button className="primary" onClick={continuePracticeDeviation}>Продовжити нестандартно</button>
+          </div>
+        </section>
+      )}
+
+      {screen === 'train' && mode === 'practice' && practiceCorrection && current && hint && (
+        <section className="practice-correction" aria-live="assertive">
+          <strong>Спробуй теоретичний хід</strong>
+          <p>Зроби хід із <b>{hint.from}</b> на підсвічене поле <b>{hint.to}</b>.</p>
+          <small>{current.explanation}</small>
+        </section>
+      )}
 
       <section className="board-wrap" aria-label="Шахова дошка">
         <Chessboard options={{
@@ -920,7 +987,11 @@ function App() {
           onSquareClick: ({ square }) => chooseSquare(square as Square),
         }} />
         {displayedBadge && (
-          <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} title={displayedBadge.label} aria-label={displayedBadge.label}>{displayedBadge.symbol}</div>
+          <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} title={displayedBadge.label} aria-label={displayedBadge.label}>
+            {displayedBadge.tone === 'theory'
+              ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c3.2-.7 5.8 0 8 1.8v11c-2.2-1.8-4.8-2.5-8-1.8v-11Zm16 0c-3.2-.7-5.8 0-8 1.8v11c2.2-1.8 4.8-2.5 8-1.8v-11Z" /></svg>
+              : displayedBadge.symbol}
+          </div>
         )}
       </section>
 

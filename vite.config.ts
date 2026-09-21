@@ -5,13 +5,4 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   server: { host: true },
-  build: {
-    rollupOptions: {
-      output: {
-        entryFileNames: 'assets/app.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: (asset) => asset.name?.endsWith('.css') ? 'assets/app.css' : 'assets/[name][extname]',
-      },
-    },
-  },
 })

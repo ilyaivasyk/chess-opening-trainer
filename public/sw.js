@@ -1,4 +1,4 @@
-const CACHE = 'debut-offline-v13'
+const CACHE = 'debut-offline-v14'
 const CORE = [
   './', './index.html', './manifest.webmanifest',
   './assets/app.js', './assets/app.css',
@@ -23,6 +23,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
+  const url = new URL(event.request.url)
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -31,6 +33,18 @@ self.addEventListener('fetch', (event) => {
           return response
         })
         .catch(() => caches.match('./index.html')),
+    )
+    return
+  }
+
+  if (url.pathname.endsWith('/assets/app.js') || url.pathname.endsWith('/assets/app.css')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
+          return response
+        })
+        .catch(() => caches.match(event.request)),
     )
     return
   }

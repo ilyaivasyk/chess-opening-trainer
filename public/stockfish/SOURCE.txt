@@ -1,0 +1,4 @@
+Stockfish 19 WebAssembly build
+Source package: https://www.npmjs.com/package/stockfish
+Upstream source: https://github.com/nmrugg/stockfish.js
+License: GNU General Public License v3 (see Copying.txt)

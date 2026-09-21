@@ -1,0 +1,198 @@
+{
+  "id": "italian",
+  "name": "Італійська партія",
+  "side": "white",
+  "theory": {
+    "history": "Це один із найстаріших записаних дебютів. Його вивчали італійські майстри XVI–XVII століть: Педро Даміано, Джуліо Чезаре Полеріо та Джоакіно Греко. Дебют пережив понад чотири століття й досі регулярно зустрічається в партіях гросмейстерів.",
+    "summary": "Італійська партія — класичний дебют після 1.e4 e5 2.Nf3 Nc6 3.Bc4. Білі швидко розвивають королівський фланг, готують рокіровку та змушують чорних уважно захищати центр і поле f7.",
+    "whiteGoals": [
+      "Розвинути коня і слона з темпом та швидко рокірувати.",
+      "Зберегти тиск слона на f7, але не починати атаку без підготовки.",
+      "Підготувати c3 і d4 або побудувати спокійну схему d3, Re1, Nbd2–f1–g3.",
+      "Після завершення розвитку боротися за центр або почати наступ на королівському фланзі."
+    ],
+    "blackGoals": [
+      "Надійно утримати пішака e5 та завершити розвиток.",
+      "Рокірувати й нейтралізувати тиск слона c4 на f7.",
+      "Підготувати центральний удар ...d5 — головне звільнення позиції чорних.",
+      "Використати ...a6 і ...b5 для простору або ...Be6 для розміну активного слона білих."
+    ],
+    "keySquares": [
+      { "square": "f7", "idea": "Початкова ціль слона c4. До рокіровки поле захищає лише король." },
+      { "square": "d5", "idea": "Ключове центральне поле. Білі контролюють його, чорні прагнуть провести ...d5." },
+      { "square": "e5", "idea": "Основа центра чорних і перша ціль коня f3." },
+      { "square": "f5", "idea": "Типова ціль коня після маневру Nbd2–f1–g3; звідси він тисне на короля." }
+    ],
+    "warning": "Не атакуй f7 лише тому, що слон дивиться на це поле. Спочатку заверши розвиток і перевір центральну відповідь ...d5."
+  },
+  "sources": [
+    {
+      "id": "modernized-italian",
+      "title": "The Modernized Italian Game for White",
+      "author": "Alexander Kalinin, Nikolai Kalinichenko",
+      "publisher": "Thinkers Publishing",
+      "url": "https://thinkerspublishing.com/product/the-modernized-italian-game-for-white/"
+    },
+    {
+      "id": "slow-italian",
+      "title": "Winning with the Slow (but Venomous!) Italian",
+      "author": "GM Karsten Müller, Georgios Souleidis",
+      "publisher": "New In Chess",
+      "url": "https://www.newinchess.com/winning-with-the-slow-but-venomous-italian"
+    },
+    {
+      "id": "chesscom-italian",
+      "title": "Italian Game — opening guide",
+      "author": "Chess.com master editorial team",
+      "publisher": "Chess.com",
+      "url": "https://www.chess.com/openings/Italian-Game"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "giuoco-pianissimo",
+      "name": "Спокійний італійський варіант",
+      "steps": [
+        {
+          "userMove": "e2e4",
+          "title": "Займи центр",
+          "explanation": "Пішак контролює d5 і f5 та відкриває шлях ферзю і слону.",
+          "opponentMove": "e7e5",
+          "opponentExplanation": "Чорні симетрично контролюють центр."
+        },
+        {
+          "userMove": "g1f3",
+          "title": "Розвивай коня з темпом",
+          "explanation": "Кінь виходить на активне поле та одразу атакує пішака e5.",
+          "opponentMove": "b8c6",
+          "opponentExplanation": "Кінь захищає e5 і розвивається."
+        },
+        {
+          "userMove": "f1c4",
+          "title": "Націлься на f7",
+          "explanation": "Слон виходить на найактивнішу діагональ і тисне на слабке поле f7.",
+          "opponentMove": "f8c5",
+          "opponentExplanation": "Чорні теж розвивають слона й контролюють центр."
+        },
+        {
+          "userMove": "c2c3",
+          "title": "Підготуй d4",
+          "explanation": "Хід c3 підтримує майбутній прорив d4 і створення сильного центру.",
+          "opponentMove": "g8f6",
+          "opponentExplanation": "Чорні розвивають коня й атакують e4."
+        },
+        {
+          "userMove": "d2d3",
+          "title": "Спочатку укріпи центр",
+          "explanation": "d3 захищає e4, відкриває слона c1 і залишає можливість зіграти d4 пізніше.",
+          "opponentMove": "d7d6",
+          "opponentExplanation": "Чорні так само підтримують центрального пішака."
+        },
+        {
+          "userMove": "e1g1",
+          "title": "Сховай короля",
+          "explanation": "Рокіровка робить короля безпечнішим і вводить туру в гру.",
+          "opponentMove": "e8g8",
+          "opponentExplanation": "Чорні також завершують підготовку короля."
+        },
+        {
+          "userMove": "f1e1",
+          "title": "Підтримай e4",
+          "explanation": "Тура захищає пішака e4 та готує центральний прорив d4.",
+          "opponentMove": "a7a6",
+          "opponentExplanation": "Чорні готують Ba7 і залишають слона на сильній діагоналі."
+        },
+        {
+          "userMove": "c4b3",
+          "title": "Збережи активного слона",
+          "explanation": "Слон заздалегідь відходить від ...b5 з темпом і зберігає тиск уздовж діагоналі на f7.",
+          "opponentMove": "c5a7",
+          "opponentExplanation": "Чорні ховають слона від темпів d4."
+        },
+        {
+          "userMove": "b1d2",
+          "title": "Почни королівський маневр",
+          "explanation": "Кінь іде маршрутом d2–f1–g3, звільняючи шлях пішаку d.",
+          "opponentMove": "h7h6",
+          "opponentExplanation": "Чорні забирають поле g5 у білих фігур."
+        },
+        {
+          "userMove": "d2f1",
+          "title": "Переведи коня до короля",
+          "explanation": "З f1 кінь може вийти на g3 і посилити атаку на королівському фланзі.",
+          "opponentMove": "f8e8",
+          "opponentExplanation": "Тура підтримує e5 і готує центральну боротьбу."
+        },
+        {
+          "userMove": "f1g3",
+          "title": "Позиція дебюту побудована",
+          "explanation": "Кінь тисне на f5 і h5. Далі білим потрібно підготувати d4 або атаку на короля.",
+          "opponentMove": "c8e6",
+          "opponentExplanation": "Чорні завершують розвиток і пропонують розмін активного слона."
+        }
+      ]
+    },
+    {
+      "id": "two-knights",
+      "name": "Захист двох коней",
+      "steps": [
+        {
+          "userMove": "e2e4",
+          "title": "Займи центр",
+          "explanation": "Пішак контролює центральні поля й відкриває лінії фігурам.",
+          "opponentMove": "e7e5",
+          "opponentExplanation": "Чорні відповідають симетрично."
+        },
+        {
+          "userMove": "g1f3",
+          "title": "Атакуй e5",
+          "explanation": "Кінь розвивається з темпом проти центрального пішака.",
+          "opponentMove": "b8c6",
+          "opponentExplanation": "Чорні захищають e5."
+        },
+        {
+          "userMove": "f1c4",
+          "title": "Створи тиск на f7",
+          "explanation": "Слон займає активну діагональ і прискорює рокіровку.",
+          "opponentMove": "g8f6",
+          "opponentExplanation": "Це захист двох коней. Чорні атакують e4 і провокують активну гру."
+        },
+        {
+          "userMove": "d2d3",
+          "title": "Обери надійний варіант",
+          "explanation": "d3 захищає e4 і веде до позиційної гри. Ng5 можливий, але потребує точного знання тактики.",
+          "opponentMove": "f8c5",
+          "opponentExplanation": "Чорні активно розвивають слона."
+        },
+        {
+          "userMove": "e1g1",
+          "title": "Заверши безпеку короля",
+          "explanation": "Після рокіровки можна спокійно готувати c3 і d4.",
+          "opponentMove": "d7d6",
+          "opponentExplanation": "Чорні укріплюють центр."
+        },
+        {
+          "userMove": "c2c3",
+          "title": "Підготуй центральний прорив",
+          "explanation": "c3 готує d4 і забирає поле d4 у чорного коня.",
+          "opponentMove": "e8g8",
+          "opponentExplanation": "Чорні рокірують."
+        },
+        {
+          "userMove": "f1e1",
+          "title": "Посиль центр",
+          "explanation": "Тура підтримує e4. Наступний стратегічний крок — d4 у слушний момент.",
+          "opponentMove": "a7a6",
+          "opponentExplanation": "Чорні готують відступ слона."
+        },
+        {
+          "userMove": "c4b3",
+          "title": "Не віддавай важливого слона",
+          "explanation": "Слон зберігає тиск на f7 і уникає майбутніх темпів.",
+          "opponentMove": "c5a7",
+          "opponentExplanation": "Чорні залишають свого слона на діагоналі a7–g1."
+        }
+      ]
+    }
+  ]
+}

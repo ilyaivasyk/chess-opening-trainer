@@ -1,0 +1,27 @@
+{
+  "name": "debut",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "check:course": "node scripts/check-course.mjs",
+    "test:rating": "node scripts/test-full-rating.mjs"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.2.0",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "^19.2.0",
+    "stockfish": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}

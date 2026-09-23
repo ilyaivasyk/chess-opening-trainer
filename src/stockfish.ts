@@ -1,6 +1,6 @@
 export type EngineStrength = 800 | 1200 | 1600 | 1800 | 2000 | 3000
 
-export type EngineAnalysis = { bestMove: string | null; scoreCp: number }
+export type EngineAnalysis = { bestMove: string | null; scoreCp: number; principalVariation: string[] }
 
 export class StockfishEngine {
   private worker = new Worker(`${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`)
@@ -9,6 +9,7 @@ export class StockfishEngine {
   private rejectSearch?: (error: Error) => void
   private searchTimer?: number
   private lastScore = 0
+  private lastPrincipalVariation: string[] = []
 
   constructor() {
     this.ready = new Promise((resolve, reject) => {
@@ -28,12 +29,14 @@ export class StockfishEngine {
           }
           const cp = line.match(/\bscore cp (-?\d+)/)
           const mate = line.match(/\bscore mate (-?\d+)/)
+          const principalVariation = line.match(/\bpv (.+)$/)
           if (cp) this.lastScore = Number(cp[1])
           if (mate) this.lastScore = Number(mate[1]) > 0 ? 10_000 : -10_000
+          if (principalVariation) this.lastPrincipalVariation = principalVariation[1].trim().split(/\s+/)
           if (line.startsWith('bestmove ')) {
             const move = line.split(' ')[1]
             window.clearTimeout(this.searchTimer)
-            this.resolveSearch?.({ bestMove: move === '(none)' ? null : move, scoreCp: this.lastScore })
+            this.resolveSearch?.({ bestMove: move === '(none)' ? null : move, scoreCp: this.lastScore, principalVariation: this.lastPrincipalVariation })
             this.resolveSearch = undefined
             this.rejectSearch = undefined
           }
@@ -51,6 +54,7 @@ export class StockfishEngine {
     await this.ready
     this.configure(strength)
     this.lastScore = 0
+    this.lastPrincipalVariation = []
     const result = new Promise<EngineAnalysis>((resolve, reject) => {
       this.resolveSearch = resolve
       this.rejectSearch = reject

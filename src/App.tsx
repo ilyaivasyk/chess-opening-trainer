@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Chess, type Move, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
-import italian from './data/italian.json'
+import { courses } from './data/courses'
 import { StockfishEngine, type EngineStrength } from './stockfish'
 
 type Mode = 'coach' | 'practice' | 'exam'
 type Screen = 'home' | 'theory' | 'train' | 'rating'
 type Category = 'beginner' | 'intermediate' | 'advanced'
 type ColorFilter = 'all' | 'white' | 'black'
+type VariantFilter = string
 type PlayerColor = 'w' | 'b'
 type RatingStage = 'playing' | 'between' | 'complete'
 type ManualOutcome = 'resigned' | 'draw-agreed' | null
 type MoveActor = 'player' | 'engine' | 'course'
+type AnalysisLabel = 'Блискучий' | 'Найкращий' | 'Чудовий' | 'Добрий' | 'Неточність' | 'Помилка' | 'Груба помилка'
 
 type MoveQuality = {
   cpLoss: number
@@ -63,8 +65,12 @@ type MoveBadge = {
 
 type AnalysedMove = GameMoveRecord & {
   cpLoss: number
+  winDrop: number
+  accuracy: number
   bestMove: string | null
-  label: 'Блискучий' | 'Найкращий' | 'Чудовий' | 'Добрий' | 'Неточність' | 'Помилка' | 'Груба помилка'
+  bestMoveSan: string | null
+  principalVariationSan: string[]
+  label: AnalysisLabel
 }
 
 type LessonStep = {
@@ -89,19 +95,28 @@ const modes: { id: Mode; name: string; description: string }[] = [
   { id: 'exam', name: 'Іспит', description: 'Без підказок, аналіз після дебюту' },
 ]
 
-const openings = [
-  { name: 'Італійська партія', tag: 'Доступно', active: true, side: 'both' },
-  { name: 'Лондонська система', tag: 'Скоро', active: false, side: 'white' },
-  { name: 'Ферзевий гамбіт', tag: 'Скоро', active: false, side: 'white' },
-  { name: 'Захист Каро-Канн', tag: 'Скоро', active: false, side: 'black' },
-  { name: 'Відхилений ферзевий гамбіт', tag: 'Скоро', active: false, side: 'black' },
-]
-
 const categories: { id: Category; name: string; note: string }[] = [
   { id: 'beginner', name: 'Початківець', note: '5 дебютів' },
-  { id: 'intermediate', name: 'Середній', note: 'У розробці' },
-  { id: 'advanced', name: 'Досвідчений', note: 'У розробці' },
+  { id: 'intermediate', name: 'Середній', note: '2 дебюти' },
+  { id: 'advanced', name: 'Досвідчений', note: '2 дебюти' },
 ]
+
+const plannedCourses: Record<Category, string[]> = {
+  beginner: ['Шотландська партія', 'Віденська партія', 'Дебют чотирьох коней'],
+  intermediate: ['Французький захист', 'Захист Пірца', 'Голландський захист'],
+  advanced: ['Захист Грюнфельда', 'Каталонський початок', 'Англійський початок'],
+}
+
+const strengthOptions: { value: EngineStrength; label: string }[] = [
+  { value: 800, label: 'Початківець' },
+  { value: 1200, label: 'Любитель' },
+  { value: 1600, label: 'Клубний' },
+  { value: 1800, label: 'Сильний клубний' },
+  { value: 2000, label: 'Сильний' },
+  { value: 3000, label: 'Максимум' },
+]
+
+const analysisLabels: AnalysisLabel[] = ['Блискучий', 'Найкращий', 'Чудовий', 'Добрий', 'Неточність', 'Помилка', 'Груба помилка']
 
 const ratingKey = 'player-rating-v3'
 const samplesKey = 'placement-pair-v3'
@@ -156,9 +171,15 @@ function moveParts(uci: string) {
   return { from: uci.slice(0, 2) as Square, to: uci.slice(2, 4) as Square, promotion: uci[4] }
 }
 
+function scenarioVariant(scenario: Scenario) {
+  if (scenario.id.includes('two-knights')) return 'two-knights'
+  if (scenario.id.includes('pianissimo')) return 'pianissimo'
+  return scenario.id.replace(/^(white|black)-/, '')
+}
+
 function buildOpeningBook() {
   const book = new Set<string>()
-  const scenarios = [...italian.scenarios, ...italian.blackScenarios] as Scenario[]
+  const scenarios = courses.flatMap((course) => [...course.scenarios, ...course.blackScenarios]) as Scenario[]
   for (const scenario of scenarios) {
     const position = new Chess()
     const add = (uci: string) => {
@@ -179,6 +200,14 @@ const openingBook = buildOpeningBook()
 
 function detectOpening(moves: string[]) {
   const starts = (...line: string[]) => line.every((move, index) => moves[index] === move)
+  if (starts('d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4')) return 'Захист Німцовича'
+  if (starts('d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'f8g7')) return 'Староіндійський захист'
+  if (starts('e2e4', 'c7c5')) return 'Сицилійський захист'
+  if (starts('e2e4', 'c7c6')) return 'Захист Каро — Канн'
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5')) return 'Іспанська партія'
+  if (starts('d2d4', 'd7d5', 'c2c4', 'e7e6')) return 'Відхилений ферзевий гамбіт'
+  if (starts('d2d4', 'd7d5', 'c2c4')) return 'Ферзевий гамбіт'
+  if (starts('d2d4', 'd7d5', 'g1f3', 'g8f6', 'c1f4') || starts('d2d4', 'g8f6', 'g1f3', 'd7d5', 'c1f4')) return 'Лондонська система'
   if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6')) return 'Італійська партія: захист двох коней'
   if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5')) {
     if (moves.includes('c2c3') && moves.includes('d2d3')) return 'Італійська партія: Джоко-Піанісимо'
@@ -213,14 +242,53 @@ function badgePosition(square: Square, orientation: PlayerColor): CSSProperties 
   return { left: `${column * 12.5 + 7.5}%`, top: `${row * 12.5 + .7}%` }
 }
 
-function moveLabel(cpLoss: number, bestMove: string | null, playedMove: string, san: string): AnalysedMove['label'] {
-  if (cpLoss <= 5 && bestMove === playedMove && /[x+#]/.test(san)) return 'Блискучий'
-  if (cpLoss <= 10) return 'Найкращий'
-  if (cpLoss <= 25) return 'Чудовий'
-  if (cpLoss <= 60) return 'Добрий'
-  if (cpLoss <= 120) return 'Неточність'
-  if (cpLoss <= 250) return 'Помилка'
+function materialBalance(position: Chess, color: PlayerColor) {
+  const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+  return position.board().flat().reduce((total, piece) => total + (piece ? values[piece.type] * (piece.color === color ? 1 : -1) : 0), 0)
+}
+
+function isGoodPieceSacrifice(move: GameMoveRecord, cpLoss: number, beforeScore: number, afterScore: number) {
+  const before = new Chess(move.fenBefore)
+  const movedPiece = before.get(move.from)
+  if (!movedPiece || !['n', 'b', 'r', 'q'].includes(movedPiece.type) || cpLoss > 25 || beforeScore >= 500 || -afterScore < -150) return false
+  const balanceBefore = materialBalance(before, move.color)
+  const after = new Chess(move.fenAfter)
+  return after.moves({ verbose: true })
+    .filter((reply) => reply.to === move.to && Boolean(reply.captured))
+    .some((reply) => {
+      const line = new Chess(move.fenAfter)
+      line.move(reply)
+      return materialBalance(line, move.color) <= balanceBefore - 2
+    })
+}
+
+function moveLabel(winDrop: number, bestMove: string | null, playedMove: string, brilliant: boolean): AnalysisLabel {
+  if (brilliant) return 'Блискучий'
+  if (bestMove === playedMove || winDrop <= .5) return 'Найкращий'
+  if (winDrop <= 2) return 'Чудовий'
+  if (winDrop <= 5) return 'Добрий'
+  if (winDrop <= 10) return 'Неточність'
+  if (winDrop <= 20) return 'Помилка'
   return 'Груба помилка'
+}
+
+function variationToSan(fen: string, moves: string[], limit = 6) {
+  const position = new Chess(fen)
+  const san: string[] = []
+  for (const uci of moves.slice(0, limit)) {
+    const move = moveParts(uci)
+    const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+    if (!played) break
+    san.push(played.san)
+  }
+  return san
+}
+
+function gamePerformance(accuracy: number, opponent: EngineStrength, score: number) {
+  const quality = accuracy < 45 ? 400 : accuracy < 58 ? 600 : accuracy < 70 ? 850 : accuracy < 80 ? 1100 : accuracy < 88 ? 1400 : accuracy < 93 ? 1750 : accuracy < 96 ? 2000 : 2300
+  const opponentRating = opponent === 3000 ? 2600 : opponent
+  const resultRating = opponentRating + (score === 1 ? 200 : score === .5 ? 0 : -200)
+  return Math.max(100, Math.min(2800, Math.round(((quality + resultRating) / 2) / 50) * 50))
 }
 
 function gameResultText(position: Chess, outcome: ManualOutcome) {
@@ -251,11 +319,13 @@ function App() {
   const lastDropAt = useRef(0)
   const [screen, setScreen] = useState<Screen>('home')
   const [category, setCategory] = useState<Category>('beginner')
+  const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [colorFilter, setColorFilter] = useState<ColorFilter>('all')
+  const [variantFilter, setVariantFilter] = useState<VariantFilter>('all')
   const [mode, setMode] = useState<Mode>('coach')
   const [surprises, setSurprises] = useState(true)
   const [strength, setStrength] = useState<EngineStrength>(1200)
-  const [scenario, setScenario] = useState<Scenario>(italian.scenarios[0])
+  const [scenario, setScenario] = useState<Scenario>(courses[0].scenarios[0])
   const [trainingColor, setTrainingColor] = useState<PlayerColor>('w')
   const [step, setStep] = useState(0)
   const [fen, setFen] = useState(game.current.fen())
@@ -270,7 +340,9 @@ function App() {
   const [freePlay, setFreePlay] = useState(false)
   const [mistakes, setMistakes] = useState<string[]>([])
   const [manualOutcome, setManualOutcome] = useState<ManualOutcome>(null)
+  const [strengthMenuOpen, setStrengthMenuOpen] = useState(false)
   const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [analysisSummaryOpen, setAnalysisSummaryOpen] = useState(false)
   const [analysisBusy, setAnalysisBusy] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState(0)
   const [analysisItems, setAnalysisItems] = useState<AnalysedMove[]>([])
@@ -280,6 +352,9 @@ function App() {
   const [playerColor, setPlayerColor] = useState<PlayerColor>('w')
   const [ratingStage, setRatingStage] = useState<RatingStage>('playing')
   const savedRating = readJson<RatingResult | null>(ratingKey, null)
+  const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0]
+  const visibleCourses = courses.filter((course) => course.category === category)
+  const visiblePlannedCourses = plannedCourses[category]
 
   const current = scenario.steps[step]
   const progress = Math.min(100, Math.round((step / scenario.steps.length) * 100))
@@ -289,6 +364,12 @@ function App() {
   const analysedMove = analysisItems[analysisIndex]
   const displayedFen = analysisOpen && analysedMove ? analysedMove.fenAfter : fen
   const displayedBadge = analysisOpen && analysedMove ? badgeForAnalysis(analysedMove) : moveBadge
+  const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
+  const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(playerAnalysis)) : 0
+  const playerScore = manualOutcome === 'resigned' ? 0 : manualOutcome === 'draw-agreed' || game.current.isDraw() ? .5 : game.current.isCheckmate() ? (game.current.turn() === playerSide ? 0 : 1) : .5
+  const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore)
+  const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
+  const bookMoveCount = playerAnalysis.filter((item) => item.bookMove).length
 
   useEffect(() => {
     engine.current = new StockfishEngine()
@@ -320,7 +401,9 @@ function App() {
     setPracticeCorrection(false)
     setPracticeDeviation(false)
     setManualOutcome(null)
+    setStrengthMenuOpen(false)
     setAnalysisOpen(false)
+    setAnalysisSummaryOpen(false)
     setAnalysisBusy(false)
     setAnalysisProgress(0)
     setAnalysisItems([])
@@ -372,8 +455,9 @@ function App() {
   }, [selected, legalTargets, lastMove, practiceCorrection, hint])
 
   function start() {
-    const source = trainingColor === 'w' ? italian.scenarios : italian.blackScenarios
-    const choices = source as Scenario[]
+    const source = trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios
+    const allChoices = source as Scenario[]
+    const choices = variantFilter === 'all' ? allChoices : allChoices.filter((item) => scenarioVariant(item) === variantFilter)
     const selectedScenario = surprises ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
     game.current.reset()
     resetGameState()
@@ -400,12 +484,12 @@ function App() {
   }
 
   function beginFromMenu() {
-    if (localStorage.getItem(`theory-seen-italian-${trainingColor}`)) start()
+    if (localStorage.getItem(`theory-seen-${selectedCourse.id}-${trainingColor}`)) start()
     else setScreen('theory')
   }
 
   function finishTheory() {
-    localStorage.setItem(`theory-seen-italian-${trainingColor}`, '1')
+    localStorage.setItem(`theory-seen-${selectedCourse.id}-${trainingColor}`, '1')
     start()
   }
 
@@ -745,6 +829,7 @@ function App() {
     if (!records.length || analysisBusy) return
     const session = gameSession.current
     setAnalysisOpen(true)
+    setAnalysisSummaryOpen(false)
     setAnalysisBusy(true)
     setAnalysisProgress(0)
     setAnalysisIndex(0)
@@ -768,11 +853,17 @@ function App() {
           cache.set(record.fenAfter, after)
         }
         const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
+        const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
+        const principalVariation = before.principalVariation.length ? before.principalVariation : before.bestMove ? [before.bestMove] : []
         analysed.push({
           ...record,
           cpLoss,
+          winDrop,
+          accuracy: lichessMoveAccuracy(winDrop),
           bestMove: before.bestMove,
-          label: moveLabel(cpLoss, before.bestMove, record.uci, record.san),
+          bestMoveSan: before.bestMove ? variationToSan(record.fenBefore, [before.bestMove], 1)[0] ?? before.bestMove : null,
+          principalVariationSan: variationToSan(record.fenBefore, principalVariation),
+          label: moveLabel(winDrop, before.bestMove, record.uci, isGoodPieceSacrifice(record, cpLoss, before.scoreCp, after.scoreCp)),
         })
         setAnalysisItems([...analysed])
         setAnalysisProgress(Math.round(((index + 1) / records.length) * 100))
@@ -780,14 +871,18 @@ function App() {
     } catch (error) {
       setFeedback(`Аналіз зупинився: ${error instanceof Error ? error.message : 'невідома помилка'}.`)
     } finally {
-      if (session === gameSession.current) setAnalysisBusy(false)
+      if (session === gameSession.current) {
+        setAnalysisBusy(false)
+        if (analysed.length) setAnalysisSummaryOpen(true)
+      }
     }
   }
 
   function saveResult() {
-    const previous = Number(localStorage.getItem('italian-best') || 0)
+    const resultKey = `${selectedCourse.id}-best`
+    const previous = Number(localStorage.getItem(resultKey) || 0)
     const score = Math.round(((scenario.steps.length - mistakes.length) / scenario.steps.length) * 100)
-    if (score > previous) localStorage.setItem('italian-best', String(score))
+    if (score > previous) localStorage.setItem(resultKey, String(score))
   }
 
   if (screen === 'home') {
@@ -814,37 +909,48 @@ function App() {
         <section>
           <div className="section-title">
             <h2>Обери дебют</h2>
-            <span>{category === 'beginner' ? '1 із 5 доступний' : 'Незабаром'}</span>
+            <span>{visibleCourses.length} доступно · {visiblePlannedCourses.length} скоро</span>
           </div>
           <div className="category-tabs">
-            {categories.map((item) => <button className={category === item.id ? 'active' : ''} onClick={() => setCategory(item.id)} key={item.id}><strong>{item.name}</strong><small>{item.note}</small></button>)}
+            {categories.map((item) => <button className={category === item.id ? 'active' : ''} onClick={() => {
+              setCategory(item.id)
+              const first = courses.find((course) => course.category === item.id)
+              if (first) setSelectedCourseId(first.id)
+              setVariantFilter('all')
+            }} key={item.id}><strong>{item.name}</strong><small>{item.note}</small></button>)}
           </div>
-          {category === 'beginner' ? (
-            <>
-              <div className="color-filter">
-                {([['all', 'Усі'], ['white', 'За білих'], ['black', 'За чорних']] as [ColorFilter, string][]).map(([id, label]) => <button className={colorFilter === id ? 'active' : ''} onClick={() => {
-                  setColorFilter(id)
-                  if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
-                }} key={id}>{label}</button>)}
-              </div>
-              <div className="opening-list">
-              {openings.filter((opening) => colorFilter === 'all' || opening.side === colorFilter || opening.side === 'both').map((opening) => {
-                const index = openings.indexOf(opening)
-                return (
-                <button className={`opening-card ${opening.active ? 'active' : ''}`} disabled={!opening.active} onClick={() => opening.active && setScreen('theory')} key={opening.name}>
-                  <span className="opening-number">0{index + 1}</span>
-                  <span className="opening-copy"><strong>{opening.name}</strong><small>{opening.side === 'both' ? 'Навчання за білих і чорних' : opening.side === 'white' ? 'Гра білими' : 'Гра чорними'}</small></span>
-                  <span className="opening-tag">{opening.tag}</span>
-                </button>
-                )
-              })}
-              </div>
-              <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label="Сторона в дебюті">
-                {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>Грати білими</strong><small>Будувати атаку</small></button>}
-                {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>Захищатися чорними</strong><small>Нейтралізувати тиск</small></button>}
-              </div>
-            </>
-          ) : <div className="empty-category"><span>♙</span><strong>Курси готуються</strong><p>Тут з’являться дебюти для цього рівня.</p></div>}
+          <div className="color-filter">
+            {([['all', 'Усі'], ['white', 'За білих'], ['black', 'За чорних']] as [ColorFilter, string][]).map(([id, label]) => <button className={colorFilter === id ? 'active' : ''} onClick={() => {
+              setColorFilter(id)
+              if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
+            }} key={id}>{label}</button>)}
+          </div>
+          <div className="opening-list">
+            {visibleCourses.map((course, index) => (
+              <button className={`opening-card ${selectedCourse.id === course.id ? 'active' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
+                <span className="opening-number">0{index + 1}</span>
+                <span className="opening-copy"><strong>{course.name}</strong><small>Навчання за білих і чорних</small></span>
+                <span className="opening-tag">Доступно</span>
+              </button>
+            ))}
+            {visiblePlannedCourses.map((name, index) => (
+              <button className="opening-card planned" disabled key={name}>
+                <span className="opening-number">{String(visibleCourses.length + index + 1).padStart(2, '0')}</span>
+                <span className="opening-copy"><strong>{name}</strong><small>Готуємо теорію та практичні варіанти</small></span>
+                <span className="opening-tag planned-tag">Скоро</span>
+              </button>
+            ))}
+          </div>
+          <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label="Сторона в дебюті">
+            {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>Грати білими</strong><small>Будувати план дебюту</small></button>}
+            {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>Грати чорними</strong><small>Вивчити правильну відповідь</small></button>}
+          </div>
+          <div className="variant-filter">
+            <div><strong>Варіант · {selectedCourse.name}</strong><small>{selectedCourse.variants.length - 1} доступно</small></div>
+            <div className="variant-options">
+              {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.name}</button>)}
+            </div>
+          </div>
         </section>
 
         <section>
@@ -863,17 +969,18 @@ function App() {
             <span><strong>Несподівані варіанти</strong><small>Stockfish перевірятиме різними продовженнями</small></span>
             <input type="checkbox" checked={surprises} onChange={(event) => setSurprises(event.target.checked)} />
           </label>
-          <label className="strength-row">
+          <div className="strength-row">
             <span><strong>Сила суперника</strong><small>{strength === 3000 ? 'Максимальна' : `≈ ${strength} Elo`} · рейтинг і тренування</small></span>
-            <select value={strength} onChange={(event) => setStrength(Number(event.target.value) as EngineStrength)}>
-              <option value="800">Початківець</option>
-              <option value="1200">Любитель</option>
-              <option value="1600">Клубний</option>
-              <option value="1800">Сильний клубний</option>
-              <option value="2000">Сильний</option>
-              <option value="3000">Максимум</option>
-            </select>
-          </label>
+            <div className="strength-picker">
+              <button className="strength-trigger" aria-expanded={strengthMenuOpen} onClick={() => setStrengthMenuOpen((open) => !open)}>
+                {strengthOptions.find((item) => item.value === strength)?.label}
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+              </button>
+              {strengthMenuOpen && <div className="strength-menu" role="listbox" aria-label="Сила суперника">
+                {strengthOptions.map((item) => <button role="option" aria-selected={strength === item.value} className={strength === item.value ? 'active' : ''} onClick={() => { setStrength(item.value); setStrengthMenuOpen(false) }} key={item.value}>{item.label}<small>{item.value === 3000 ? 'MAX' : `${item.value} Elo`}</small></button>)}
+              </div>}
+            </div>
+          </div>
         </section>
 
         <button className="primary" onClick={beginFromMenu}>Почати тренування <span>→</span></button>
@@ -883,18 +990,21 @@ function App() {
   }
 
   if (screen === 'theory') {
-    const theory = italian.theory
+    const theory = selectedCourse.theory
+    const preview = selectedCourse.scenarios.find((item) => variantFilter === 'all' || scenarioVariant(item) === variantFilter) ?? selectedCourse.scenarios[0]
+    const previewMoves = preview.steps.flatMap((item) => [item.userMove, item.opponentMove])
+    const previewLine = variationToSan(new Chess().fen(), previewMoves, 8).join(' ')
     return (
       <main className="shell theory-screen">
         <header className="theory-header">
           <button className="icon-button" onClick={() => setScreen('home')} aria-label="Назад">←</button>
-          <div><span className="eyebrow">Перед грою · {trainingColor === 'w' ? 'білі' : 'чорні'}</span><h1>{italian.name}</h1></div>
+          <div><span className="eyebrow">Перед грою · {trainingColor === 'w' ? 'білі' : 'чорні'}</span><h1>{selectedCourse.name}</h1></div>
           <button className="skip-button" onClick={finishTheory}>Пропустити</button>
         </header>
         <section className="theory-intro">
-          <span className="move-sequence">1.e4 e5 2.Nf3 Nc6 3.Bc4</span>
+          <span className="move-sequence">{previewLine}</span>
           <h2>Про що цей дебют</h2>
-          <p>{trainingColor === 'w' ? theory.summary : `${theory.summary} За чорних твоє завдання — нейтралізувати ранній тиск на f7, завершити розвиток і підготувати звільняючий удар ...d5.`}</p>
+          <p>{trainingColor === 'w' ? theory.summary : `${theory.summary} Твій головний план за чорних: ${theory.blackGoals.join(' ')}`}</p>
         </section>
         <section className="theory-block history-block"><span>Історія</span><p>{theory.history}</p></section>
         <section className="theory-columns">
@@ -910,7 +1020,7 @@ function App() {
           <div className="section-title"><h2>Ключові поля</h2></div>
           <div className="square-guide">{theory.keySquares.map((item) => <div key={item.square}><strong>{item.square}</strong><p>{item.idea}</p></div>)}</div>
         </section>
-        <section className="warning-card"><strong>Не поспішай</strong><p>{theory.warning}</p></section>
+        <section className="warning-card"><strong>Не поспішай</strong><p>{trainingColor === 'w' ? theory.warning : `Стеж за планом білих: ${theory.whiteGoals[0]} Твоя відповідь: ${theory.blackGoals[0]}`}</p></section>
         <button className="primary" onClick={finishTheory}>Почати тренування <span>→</span></button>
       </main>
     )
@@ -920,7 +1030,7 @@ function App() {
     <main className="shell training">
       <header className="training-header">
         <button className="icon-button" onClick={() => setScreen('home')} aria-label="Назад">←</button>
-        <div><strong>{screen === 'rating' ? 'Оціночна партія' : italian.name}</strong><small>{screen === 'rating' ? `Проти Stockfish · ${strength === 3000 ? 'MAX' : strength}` : scenario.name}</small></div>
+        <div><strong>{screen === 'rating' ? 'Оціночна партія' : selectedCourse.name}</strong><small>{screen === 'rating' ? `Проти Stockfish · ${strength === 3000 ? 'MAX' : strength}` : scenario.name}</small></div>
         <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : start} aria-label="Почати знову">↻</button>
       </header>
 
@@ -928,13 +1038,13 @@ function App() {
 
       <section className={`coach-card ${screen !== 'rating' && mode === 'practice' ? 'practice-mode' : ''}`}>
         <span className="mode-pill">{screen === 'rating' ? `Суперник ${strength === 3000 ? 'MAX' : strength} · аналіз MAX · ${playerColor === 'w' ? 'білі' : 'чорні'}` : `${modes.find((item) => item.id === mode)?.name} · ${trainingColor === 'w' ? 'білі' : 'чорні'}`}</span>
-        <h2>{analysisOpen ? 'Повний аналіз партії' : screen === 'rating' ? (ratingResult ? 'Рівень визначено' : ratingStage === 'between' ? 'Половина оцінювання готова' : 'Грай без підказок') : gameFinished ? gameResultText(game.current, manualOutcome) : freePlay ? 'Мітельшпіль' : current?.title ?? 'Дебют завершено'}</h2>
+        <h2>{analysisOpen ? (analysisBusy ? 'Аналізуємо партію' : analysedMove?.label ?? 'Аналіз готовий') : screen === 'rating' ? (ratingResult ? 'Рівень визначено' : ratingStage === 'between' ? 'Половина оцінювання готова' : 'Грай без підказок') : gameFinished ? gameResultText(game.current, manualOutcome) : freePlay ? 'Мітельшпіль' : current?.title ?? 'Дебют завершено'}</h2>
         <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
         <p className="coach-copy">
           {analysisOpen
             ? analysisBusy
               ? `Stockfish перевіряє кожну позицію: ${analysisProgress}%.`
-              : 'Переглядай партію хід за ходом. Значок стоїть на фігурі, яка щойно зробила хід.'
+              : 'Обирай ходи нижче або переходь кнопками назад і вперед.'
             : screen === 'rating' && ratingStage === 'playing'
             ? 'Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.'
             : screen !== 'rating' && mode === 'coach' && current && !freePlay
@@ -965,12 +1075,12 @@ function App() {
         </section>
       )}
 
-      <section className="board-wrap" aria-label="Шахова дошка">
+      <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label="Шахова дошка">
         <Chessboard options={{
           id: 'training-board',
           position: displayedFen,
           boardOrientation: playerSide === 'b' ? 'black' : 'white',
-          boardStyle: { borderRadius: '12px', boxShadow: '0 16px 38px rgba(0,0,0,.28)', overflow: 'hidden' },
+          boardStyle: { borderRadius: '12px', boxShadow: '0 16px 38px rgba(0,0,0,.28)', overflow: 'hidden', touchAction: selected ? 'none' : 'pan-y' },
           lightSquareStyle: { backgroundColor: '#d8cfb6' },
           darkSquareStyle: { backgroundColor: '#6f8b7e' },
           squareStyles,
@@ -996,8 +1106,8 @@ function App() {
       </section>
 
       <section className="game-controls">
-        <div><span className={thinking || analysisBusy ? 'status-dot thinking' : 'status-dot'} />{analysisOpen ? analysisBusy ? 'Аналізуємо' : 'Перегляд партії' : gameFinished ? 'Партію завершено' : thinking ? 'Stockfish думає' : game.current.turn() === playerSide ? 'Твій хід' : 'Хід Stockfish'}</div>
-        <span>{analysisOpen && analysedMove ? `${analysisIndex + 1}/${analysisItems.length}` : screen === 'rating' ? 'Без підказок' : freePlay ? `${strength === 3000 ? 'MAX' : strength} Elo` : `${step}/${scenario.steps.length}`}</span>
+        <div><span className={thinking || analysisBusy ? 'status-dot thinking' : 'status-dot'} />{analysisOpen ? analysisBusy ? 'Аналізуємо' : analysedMove?.label ?? 'Аналіз готовий' : gameFinished ? 'Партію завершено' : thinking ? 'Stockfish думає' : game.current.turn() === playerSide ? 'Твій хід' : 'Хід Stockfish'}</div>
+        {!analysisOpen && <span>{screen === 'rating' ? 'Без підказок' : freePlay ? `${strength === 3000 ? 'MAX' : strength} Elo` : `${step}/${scenario.steps.length}`}</span>}
       </section>
 
       {screen === 'train' && !freePlay && mode !== 'exam' && step > 0 && !thinking && (
@@ -1031,7 +1141,7 @@ function App() {
       {analysisOpen && (
         <section className="full-analysis">
           <div className="analysis-heading">
-            <div><small>Від першого до останнього ходу</small><strong>{analysisBusy ? `Аналіз ${analysisProgress}%` : `${analysisItems.length} ходів перевірено`}</strong></div>
+            <div><small>Локальний Stockfish</small><strong>{analysisBusy ? `Аналіз ${analysisProgress}%` : 'Аналіз готовий'}</strong></div>
             <button className="icon-button" onClick={() => setAnalysisOpen(false)} aria-label="Закрити аналіз">×</button>
           </div>
           {analysisBusy && <div className="analysis-progress"><span style={{ width: `${analysisProgress}%` }} /></div>}
@@ -1054,7 +1164,11 @@ function App() {
                   : analysedMove.cpLoss <= 10
                   ? 'Хід зберігає найкращу оцінку позиції.'
                   : `Втрата оцінки: приблизно ${(analysedMove.cpLoss / 100).toFixed(1)} пішака.`}</p>
-                {!analysedMove.bookMove && analysedMove.bestMove && analysedMove.bestMove !== analysedMove.uci && <p className="best-move">Stockfish радить: <strong>{analysedMove.bestMove}</strong></p>}
+                {analysedMove.bestMoveSan && <div className="best-line">
+                  <span>Найкращий хід</span>
+                  <strong>{analysedMove.bestMoveSan}</strong>
+                  <small>Перша лінія: {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</small>
+                </div>}
                 {!analysedMove.bookMove && analysedMove.openingNote?.startsWith('Відхилення') && (
                   <p className={`departure-verdict ${analysedMove.cpLoss <= 60 ? 'safe' : 'harmful'}`}>
                     {analysedMove.cpLoss <= 60
@@ -1065,14 +1179,31 @@ function App() {
                 {analysedMove.openingNote && <p className="opening-note">♟ {analysedMove.openingNote}</p>}
               </div>
               <div className="analysis-navigation">
-                <button onClick={() => setAnalysisIndex((index) => Math.max(0, index - 1))} disabled={analysisIndex === 0}>← Попередній</button>
-                <button onClick={() => setAnalysisIndex((index) => Math.min(analysisItems.length - 1, index + 1))} disabled={analysisIndex >= analysisItems.length - 1}>Наступний →</button>
+                <button onClick={() => setAnalysisIndex((index) => Math.max(0, index - 1))} disabled={analysisIndex === 0}><b>‹</b> Назад</button>
+                <button onClick={() => setAnalysisIndex((index) => Math.min(analysisItems.length - 1, index + 1))} disabled={analysisIndex >= analysisItems.length - 1}>Далі <b>›</b></button>
               </div>
             </>
           )}
           {!analysisBusy && !analysedMove && <p className="analysis-empty">Не вдалося отримати аналіз цієї партії.</p>}
-          <p className="analysis-disclaimer">Позначки визначає локальний Stockfish. «Блискучий» — наша сувора навчальна оцінка тактичного найкращого ходу, а не рейтинг Chess.com.</p>
+          <p className="analysis-disclaimer">Позначки визначає локальний Stockfish. «Блискучий» ставиться лише найкращому або майже найкращому ходу з коректною жертвою фігури.</p>
         </section>
+      )}
+
+      {analysisSummaryOpen && !analysisBusy && playerAnalysis.length > 0 && (
+        <div className="analysis-modal" role="dialog" aria-modal="true" aria-labelledby="analysis-summary-title">
+          <div className="analysis-summary">
+            <button className="summary-close" onClick={() => setAnalysisSummaryOpen(false)} aria-label="Закрити">×</button>
+            <small>Аналіз завершено</small>
+            <h2 id="analysis-summary-title">Рівень цієї партії</h2>
+            <strong className="performance-rating">≈ {performanceRating}</strong>
+            <p>Точність твоїх ходів: <b>{analysisAccuracy}%</b></p>
+            <div className="quality-summary">
+              <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>Теорія</small></div>
+              {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove).symbol}</span><strong>{analysisCounts[label]}</strong><small>{label}</small></div>)}
+            </div>
+            <button className="primary" onClick={() => setAnalysisSummaryOpen(false)}>Перейти до аналізу <span>→</span></button>
+          </div>
+        </div>
       )}
     </main>
   )

@@ -70,6 +70,7 @@ type AnalysedMove = GameMoveRecord & {
   bestMove: string | null
   bestMoveSan: string | null
   principalVariationSan: string[]
+  evaluationCp: number
   label: AnalysisLabel
 }
 
@@ -247,6 +248,23 @@ function materialBalance(position: Chess, color: PlayerColor) {
   return position.board().flat().reduce((total, piece) => total + (piece ? values[piece.type] * (piece.color === color ? 1 : -1) : 0), 0)
 }
 
+function capturedMaterial(position: Chess, capturer: PlayerColor) {
+  const victim = capturer === 'w' ? 'b' : 'w'
+  const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }
+  const values = { p: 1, n: 3, b: 3, r: 5, q: 9 }
+  const symbols = victim === 'w'
+    ? { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' }
+    : { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' }
+  const remaining = { p: 0, n: 0, b: 0, r: 0, q: 0 }
+  position.board().flat().forEach((piece) => {
+    if (piece?.color === victim && piece.type !== 'k') remaining[piece.type] += 1
+  })
+  const order: (keyof typeof initial)[] = ['q', 'r', 'b', 'n', 'p']
+  const pieces = order.flatMap((piece) => Array(Math.max(0, initial[piece] - remaining[piece])).fill(symbols[piece]))
+  const points = order.reduce((total, piece) => total + Math.max(0, initial[piece] - remaining[piece]) * values[piece], 0)
+  return { pieces, points }
+}
+
 function isGoodPieceSacrifice(move: GameMoveRecord, cpLoss: number, beforeScore: number, afterScore: number) {
   const before = new Chess(move.fenBefore)
   const movedPiece = before.get(move.from)
@@ -311,12 +329,40 @@ function qualityClass(label: AnalysedMove['label']) {
   return 'blunder'
 }
 
+function kingSquare(position: Chess, color: PlayerColor): Square | null {
+  for (const file of 'abcdefgh') {
+    for (let rank = 1; rank <= 8; rank += 1) {
+      const square = `${file}${rank}` as Square
+      const piece = position.get(square)
+      if (piece?.type === 'k' && piece.color === color) return square
+    }
+  }
+  return null
+}
+
+function evaluationLabel(centipawns: number) {
+  if (Math.abs(centipawns) >= 9000) return centipawns > 0 ? '+M' : '−M'
+  const pawns = centipawns / 100
+  return `${pawns >= 0 ? '+' : '−'}${Math.abs(pawns).toFixed(1)}`
+}
+
+function graphPointColor(move: AnalysedMove) {
+  if (move.bookMove) return '#9b74c7'
+  if (move.label === 'Блискучий') return '#27b7b6'
+  if (move.label === 'Найкращий' || move.label === 'Чудовий') return '#72b64b'
+  if (move.label === 'Добрий') return '#89a892'
+  if (move.label === 'Неточність') return '#e5b534'
+  if (move.label === 'Помилка') return '#ed832f'
+  return '#e04b43'
+}
+
 function App() {
   const game = useRef(new Chess())
   const engine = useRef<StockfishEngine | null>(null)
   const gameHistory = useRef<GameMoveRecord[]>([])
   const gameSession = useRef(0)
   const lastDropAt = useRef(0)
+  const audioContext = useRef<AudioContext | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
   const [category, setCategory] = useState<Category>('beginner')
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
@@ -365,11 +411,34 @@ function App() {
   const displayedFen = analysisOpen && analysedMove ? analysedMove.fenAfter : fen
   const displayedBadge = analysisOpen && analysedMove ? badgeForAnalysis(analysedMove) : moveBadge
   const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
+  const opponentAnalysis = analysisItems.filter((item) => item.color !== playerSide)
   const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(playerAnalysis)) : 0
+  const opponentAccuracy = opponentAnalysis.length ? Math.round(gameAccuracy(opponentAnalysis)) : 0
   const playerScore = manualOutcome === 'resigned' ? 0 : manualOutcome === 'draw-agreed' || game.current.isDraw() ? .5 : game.current.isCheckmate() ? (game.current.turn() === playerSide ? 0 : 1) : .5
   const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore)
   const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
   const bookMoveCount = playerAnalysis.filter((item) => item.bookMove).length
+  const resultTitle = playerScore === 1 ? 'Перемога' : playerScore === .5 ? 'Нічия' : 'Поразка'
+  const displayedPosition = useMemo(() => new Chess(displayedFen), [displayedFen])
+  const checkedKingSquare = displayedPosition.isCheck() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
+  const mateLoserSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
+  const mateWinnerSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn() === 'w' ? 'b' : 'w') : null
+  const currentEvaluation = analysedMove?.evaluationCp ?? 0
+  const evaluationWhite = Math.max(5, Math.min(95, winPercent(currentEvaluation)))
+  const graphPoints = analysisItems.map((item, index) => {
+    const x = analysisItems.length <= 1 ? 10 : 10 + index * 300 / (analysisItems.length - 1)
+    const y = 60 - Math.max(-50, Math.min(50, item.evaluationCp / 10))
+    return { x, y, item }
+  })
+  const graphPath = graphPoints.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')
+  const whiteCaptured = capturedMaterial(displayedPosition, 'w')
+  const blackCaptured = capturedMaterial(displayedPosition, 'b')
+  const whiteAdvantage = Math.max(0, whiteCaptured.points - blackCaptured.points)
+  const blackAdvantage = Math.max(0, blackCaptured.points - whiteCaptured.points)
+  const playerCaptured = playerSide === 'w' ? whiteCaptured : blackCaptured
+  const opponentCaptured = playerSide === 'w' ? blackCaptured : whiteCaptured
+  const playerMaterialAdvantage = playerSide === 'w' ? whiteAdvantage : blackAdvantage
+  const opponentMaterialAdvantage = playerSide === 'w' ? blackAdvantage : whiteAdvantage
 
   useEffect(() => {
     engine.current = new StockfishEngine()
@@ -379,6 +448,34 @@ function App() {
   function restartEngine() {
     engine.current?.destroy()
     engine.current = new StockfishEngine()
+  }
+
+  function playSound(kind: 'move' | 'capture' | 'check' | 'mate') {
+    try {
+      const context = audioContext.current ?? new AudioContext()
+      audioContext.current = context
+      if (context.state === 'suspended') void context.resume()
+      const notes = kind === 'mate' ? [220, 165, 110] : kind === 'check' ? [520, 690] : kind === 'capture' ? [190, 130] : [260]
+      notes.forEach((frequency, index) => {
+        const oscillator = context.createOscillator()
+        const gain = context.createGain()
+        const start = context.currentTime + index * .075
+        oscillator.type = kind === 'move' ? 'sine' : 'triangle'
+        oscillator.frequency.setValueAtTime(frequency, start)
+        gain.gain.setValueAtTime(.0001, start)
+        gain.gain.exponentialRampToValueAtTime(.12, start + .008)
+        gain.gain.exponentialRampToValueAtTime(.0001, start + .085)
+        oscillator.connect(gain).connect(context.destination)
+        oscillator.start(start)
+        oscillator.stop(start + .09)
+      })
+    } catch {
+      // Sound is optional when iOS blocks Web Audio before a user gesture.
+    }
+  }
+
+  function playMoveSound(played: Move) {
+    playSound(game.current.isCheckmate() ? 'mate' : game.current.isCheck() ? 'check' : played.captured ? 'capture' : 'move')
   }
 
   async function analyseSafely(position: string, engineStrength: EngineStrength, moveTime: number) {
@@ -451,14 +548,15 @@ function App() {
       styles[hint.from] = { boxShadow: 'inset 0 0 0 5px #efbe4d' }
       styles[hint.to] = { background: 'radial-gradient(circle, rgba(239,190,77,.95) 0 24%, rgba(239,190,77,.28) 26% 48%, transparent 50%)' }
     }
+    if (checkedKingSquare) styles[checkedKingSquare] = { ...styles[checkedKingSquare], boxShadow: 'inset 0 0 0 5px #e14d47', background: 'radial-gradient(circle, rgba(225,77,71,.72), rgba(139,25,28,.82))' }
     return styles
-  }, [selected, legalTargets, lastMove, practiceCorrection, hint])
+  }, [selected, legalTargets, lastMove, practiceCorrection, hint, checkedKingSquare])
 
   function start() {
     const source = trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios
     const allChoices = source as Scenario[]
     const choices = variantFilter === 'all' ? allChoices : allChoices.filter((item) => scenarioVariant(item) === variantFilter)
-    const selectedScenario = surprises ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
+    const selectedScenario = variantFilter === 'all' || surprises ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
     game.current.reset()
     resetGameState()
     setScenario(selectedScenario)
@@ -560,6 +658,7 @@ function App() {
 
     const beforeFen = game.current.fen()
     const played = game.current.move({ from, to, promotion: legalMove.promotion || 'q' })
+    playMoveSound(played)
 
     setSelected(null)
     setLegalTargets([])
@@ -702,6 +801,7 @@ function App() {
     const reply = moveParts(lesson.opponentMove)
     const beforeFen = game.current.fen()
     const played = game.current.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' })
+    playMoveSound(played)
     recordMove(beforeFen, played, 'course')
     setLastMove({ from: reply.from, to: reply.to })
     setMoveBadge(null)
@@ -756,6 +856,7 @@ function App() {
         const move = moveParts(result.bestMove)
         const beforeFen = game.current.fen()
         const played = game.current.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+        playMoveSound(played)
         recordMove(beforeFen, played, 'engine')
         setLastMove({ from: move.from, to: move.to })
         setMoveBadge(null)
@@ -838,23 +939,48 @@ function App() {
     setLegalTargets([])
     const cache = new Map<string, Awaited<ReturnType<typeof analyseSafely>>>()
     const analysed: AnalysedMove[] = []
+    const completeLine = async (fen: string, initial: string[]) => {
+      const position = new Chess(fen)
+      const line: string[] = []
+      for (const uci of initial) {
+        if (line.length >= 6) break
+        const move = moveParts(uci)
+        const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+        if (!played) break
+        line.push(uci)
+      }
+      while (line.length < 6 && !position.isGameOver()) {
+        let continuation = cache.get(position.fen())
+        if (!continuation) {
+          continuation = await analyseSafely(position.fen(), 3000, 180)
+          cache.set(position.fen(), continuation)
+        }
+        if (!continuation.bestMove) break
+        const move = moveParts(continuation.bestMove)
+        const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+        if (!played) break
+        line.push(continuation.bestMove)
+      }
+      return line
+    }
     try {
       for (let index = 0; index < records.length; index += 1) {
         if (session !== gameSession.current) return
         const record = records[index]
         let before = cache.get(record.fenBefore)
         if (!before) {
-          before = await analyseSafely(record.fenBefore, 3000, 180)
+          before = await analyseSafely(record.fenBefore, 3000, 480)
           cache.set(record.fenBefore, before)
         }
         let after = cache.get(record.fenAfter)
         if (!after) {
-          after = await analyseSafely(record.fenAfter, 3000, 180)
+          after = await analyseSafely(record.fenAfter, 3000, 480)
           cache.set(record.fenAfter, after)
         }
         const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
         const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
-        const principalVariation = before.principalVariation.length ? before.principalVariation : before.bestMove ? [before.bestMove] : []
+        const rawPrincipalVariation = before.principalVariation.length ? before.principalVariation : before.bestMove ? [before.bestMove] : []
+        const principalVariation = await completeLine(record.fenBefore, rawPrincipalVariation)
         analysed.push({
           ...record,
           cpLoss,
@@ -863,6 +989,7 @@ function App() {
           bestMove: before.bestMove,
           bestMoveSan: before.bestMove ? variationToSan(record.fenBefore, [before.bestMove], 1)[0] ?? before.bestMove : null,
           principalVariationSan: variationToSan(record.fenBefore, principalVariation),
+          evaluationCp: new Chess(record.fenAfter).turn() === 'w' ? after.scoreCp : -after.scoreCp,
           label: moveLabel(winDrop, before.bestMove, record.uci, isGoodPieceSacrifice(record, cpLoss, before.scoreCp, after.scoreCp)),
         })
         setAnalysisItems([...analysed])
@@ -948,7 +1075,7 @@ function App() {
           <div className="variant-filter">
             <div><strong>Варіант · {selectedCourse.name}</strong><small>{selectedCourse.variants.length - 1} доступно</small></div>
             <div className="variant-options">
-              {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.name}</button>)}
+              {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.id === 'all' ? `🎲 Випадковий із ${selectedCourse.variants.length - 1}` : item.name}</button>)}
             </div>
           </div>
         </section>
@@ -1026,6 +1153,138 @@ function App() {
     )
   }
 
+  if (analysisOpen && analysisSummaryOpen && !analysisBusy && playerAnalysis.length > 0) {
+    return (
+      <main className="analysis-report" role="dialog" aria-modal="true" aria-labelledby="analysis-report-title">
+        <header className="report-header">
+          <button className="icon-button" onClick={() => { setAnalysisSummaryOpen(false); setAnalysisOpen(false) }} aria-label="Закрити">×</button>
+          <strong>Звіт про партію</strong>
+          <span />
+        </header>
+        <section className={`report-result ${playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'}`}>
+          <span className="result-crown">{playerScore === 1 ? '♔' : playerScore === .5 ? '½' : '♚'}</span>
+          <div><small>Аналіз завершено</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome)}</p></div>
+        </section>
+        <section className="report-rating">
+          <div><small>Рівень цієї партії</small><strong>≈ {performanceRating}</strong></div>
+          <div><small>Твоя точність</small><strong>{analysisAccuracy}%</strong></div>
+        </section>
+        <section className="evaluation-chart" aria-label="Графік переваги протягом партії">
+          <div className="chart-title"><strong>Перебіг партії</strong><span>перевага білих / чорних</span></div>
+          <svg viewBox="0 0 320 120" role="img" aria-label="Діаграма оцінки позицій">
+            <rect x="0" y="0" width="320" height="60" rx="10" fill="rgba(238,242,232,.055)" />
+            <rect x="0" y="60" width="320" height="60" rx="10" fill="rgba(0,0,0,.18)" />
+            <line x1="0" y1="60" x2="320" y2="60" stroke="rgba(238,242,232,.35)" strokeWidth="1" />
+            {graphPath && <path d={graphPath} fill="none" stroke="#eef2e8" strokeWidth="2.5" strokeLinejoin="round" />}
+            {graphPoints.map((point) => <circle key={`${point.item.ply}-${point.item.uci}`} cx={point.x} cy={point.y} r="3.5" fill={graphPointColor(point.item)} />)}
+          </svg>
+        </section>
+        <section className="players-summary">
+          <div><span className="player-piece">{playerSide === 'w' ? '♔' : '♚'}</span><small>Ти · {playerSide === 'w' ? 'білі' : 'чорні'}</small><strong>{analysisAccuracy}%</strong></div>
+          <div><span className="player-piece">{playerSide === 'w' ? '♚' : '♔'}</span><small>Stockfish · {strength === 3000 ? 'MAX' : strength}</small><strong>{opponentAccuracy}%</strong></div>
+        </section>
+        <section className="quality-report">
+          <h2>Твої ходи</h2>
+          <div className="quality-summary">
+            <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>Теорія</small></div>
+            {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove).symbol}</span><strong>{analysisCounts[label]}</strong><small>{label}</small></div>)}
+          </div>
+        </section>
+        <button className="primary report-review-button" onClick={() => setAnalysisSummaryOpen(false)}>Дивитися аналіз <span>→</span></button>
+      </main>
+    )
+  }
+
+  if (analysisOpen) {
+    return (
+      <main className="analysis-screen">
+        <header className="review-header">
+          <button className="icon-button" onClick={() => setAnalysisOpen(false)} aria-label="Закрити аналіз">×</button>
+          <div><strong>Аналіз партії</strong><small>Локальний Stockfish · MAX</small></div>
+          <span className="evaluation-number">{analysedMove ? evaluationLabel(currentEvaluation) : '…'}</span>
+        </header>
+
+        {analysisBusy && (
+          <section className="analysis-loading">
+            <span className="analysis-spinner" />
+            <h1>Аналізуємо партію</h1>
+            <p>Stockfish перевіряє позиції та будує першу лінію.</p>
+            <div className="analysis-progress"><span style={{ width: `${analysisProgress}%` }} /></div>
+            <strong>{analysisProgress}%</strong>
+          </section>
+        )}
+
+        {!analysisBusy && analysedMove && (
+          <>
+            <section className="review-commentary">
+              <div className="review-title">
+                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? '📖 Теорія' : `${badgeForAnalysis(analysedMove).symbol} ${analysedMove.label}`}</span>
+                <strong>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</strong>
+              </div>
+              <p><b>{analysedMove.openingName}.</b> {analysedMove.bookMove
+                ? 'Книжковий хід у цьому варіанті.'
+                : analysedMove.cpLoss <= 10
+                ? 'Хід зберігає найкращу оцінку позиції.'
+                : `Втрачено приблизно ${(analysedMove.cpLoss / 100).toFixed(1)} пішака оцінки.`}</p>
+              {analysedMove.bestMoveSan && (
+                <div className="review-best-line">
+                  <span>Найкращий хід <strong>{analysedMove.bestMoveSan}</strong></span>
+                  <p><b>Перша лінія:</b> {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</p>
+                </div>
+              )}
+              {analysedMove.openingNote && <p className="opening-note">♟ {analysedMove.openingNote}</p>}
+            </section>
+
+            <section className="review-board-row">
+              <div className={`evaluation-bar ${playerSide === 'b' ? 'black-orientation' : ''}`} aria-label={`Оцінка позиції ${evaluationLabel(currentEvaluation)}`}>
+                {playerSide === 'w' ? <>
+                  <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
+                  <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
+                </> : <>
+                  <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
+                  <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
+                </>}
+                <b>{evaluationLabel(currentEvaluation)}</b>
+              </div>
+              <div className="board-wrap review-board" aria-label="Шахова дошка аналізу">
+                <Chessboard options={{
+                  id: 'analysis-board',
+                  position: displayedFen,
+                  boardOrientation: playerSide === 'b' ? 'black' : 'white',
+                  boardStyle: { borderRadius: '8px', overflow: 'hidden' },
+                  lightSquareStyle: { backgroundColor: '#d8cfb6' },
+                  darkSquareStyle: { backgroundColor: '#6f8b7e' },
+                  squareStyles,
+                  animationDurationInMs: 120,
+                  allowDrawingArrows: false,
+                  canDragPiece: () => false,
+                }} />
+                {displayedBadge && <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} aria-label={displayedBadge.label}>{displayedBadge.symbol}</div>}
+                {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label="Король програв">×</div>}
+                {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label="Король переміг">♛</div>}
+              </div>
+            </section>
+
+            <div className="material-row analysis-material">
+              <span>{playerSide === 'w' ? 'Ти · білі' : 'Ти · чорні'}</span>
+              <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
+            </div>
+
+            <nav className="review-controls" aria-label="Перехід між ходами">
+              <button onClick={() => setAnalysisIndex((index) => Math.max(0, index - 1))} disabled={analysisIndex === 0} aria-label="Попередній хід">‹</button>
+              <div className="review-moves">
+                {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => setAnalysisIndex(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
+              </div>
+              <button onClick={() => setAnalysisIndex((index) => Math.min(analysisItems.length - 1, index + 1))} disabled={analysisIndex >= analysisItems.length - 1} aria-label="Наступний хід">›</button>
+            </nav>
+          </>
+        )}
+
+        {!analysisBusy && !analysedMove && <p className="analysis-empty">Не вдалося отримати аналіз цієї партії.</p>}
+      </main>
+    )
+  }
+
   return (
     <main className="shell training">
       <header className="training-header">
@@ -1075,6 +1334,11 @@ function App() {
         </section>
       )}
 
+      <div className="material-row opponent-material" aria-label="Матеріал суперника">
+        <span>Stockfish · {playerSide === 'w' ? 'чорні' : 'білі'}</span>
+        <b>{opponentCaptured.pieces.join(' ') || '—'} {opponentMaterialAdvantage > 0 ? `+${opponentMaterialAdvantage}` : ''}</b>
+      </div>
+
       <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label="Шахова дошка">
         <Chessboard options={{
           id: 'training-board',
@@ -1099,11 +1363,18 @@ function App() {
         {displayedBadge && (
           <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} title={displayedBadge.label} aria-label={displayedBadge.label}>
             {displayedBadge.tone === 'theory'
-              ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c3.2-.7 5.8 0 8 1.8v11c-2.2-1.8-4.8-2.5-8-1.8v-11Zm16 0c-3.2-.7-5.8 0-8 1.8v11c2.2-1.8 4.8-2.5 8-1.8v-11Z" /></svg>
+              ? '📖'
               : displayedBadge.symbol}
           </div>
         )}
+        {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label="Король програв">×</div>}
+        {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label="Король переміг">♛</div>}
       </section>
+
+      <div className="material-row player-material" aria-label="Твій матеріал">
+        <span>Ти · {playerSide === 'w' ? 'білі' : 'чорні'}</span>
+        <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
+      </div>
 
       <section className="game-controls">
         <div><span className={thinking || analysisBusy ? 'status-dot thinking' : 'status-dot'} />{analysisOpen ? analysisBusy ? 'Аналізуємо' : analysedMove?.label ?? 'Аналіз готовий' : gameFinished ? 'Партію завершено' : thinking ? 'Stockfish думає' : game.current.turn() === playerSide ? 'Твій хід' : 'Хід Stockfish'}</div>
@@ -1138,73 +1409,6 @@ function App() {
         <button className="primary analysis-start" onClick={() => void analyseGame()}>Проаналізувати всю партію <span>→</span></button>
       )}
 
-      {analysisOpen && (
-        <section className="full-analysis">
-          <div className="analysis-heading">
-            <div><small>Локальний Stockfish</small><strong>{analysisBusy ? `Аналіз ${analysisProgress}%` : 'Аналіз готовий'}</strong></div>
-            <button className="icon-button" onClick={() => setAnalysisOpen(false)} aria-label="Закрити аналіз">×</button>
-          </div>
-          {analysisBusy && <div className="analysis-progress"><span style={{ width: `${analysisProgress}%` }} /></div>}
-          {analysedMove && (
-            <>
-              <div className="move-timeline">
-                {analysisItems.map((item, index) => (
-                  <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => setAnalysisIndex(index)} key={`${item.ply}-${item.uci}`}>{item.san}</button>
-                ))}
-              </div>
-              <div className="move-review">
-                <div className="review-tags">
-                  {analysedMove.bookMove && <span className="quality theory">📖 Теорія</span>}
-                  {!analysedMove.bookMove && <span className={`quality ${qualityClass(analysedMove.label)}`}>{badgeForAnalysis(analysedMove).symbol} {analysedMove.label}</span>}
-                </div>
-                <h3>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</h3>
-                <p className="opening-name">{analysedMove.openingName}</p>
-                <p>{analysedMove.bookMove
-                  ? 'Книжковий хід у цьому вивченому варіанті. Інший вибір Stockfish не робить його помилкою.'
-                  : analysedMove.cpLoss <= 10
-                  ? 'Хід зберігає найкращу оцінку позиції.'
-                  : `Втрата оцінки: приблизно ${(analysedMove.cpLoss / 100).toFixed(1)} пішака.`}</p>
-                {analysedMove.bestMoveSan && <div className="best-line">
-                  <span>Найкращий хід</span>
-                  <strong>{analysedMove.bestMoveSan}</strong>
-                  <small>Перша лінія: {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</small>
-                </div>}
-                {!analysedMove.bookMove && analysedMove.openingNote?.startsWith('Відхилення') && (
-                  <p className={`departure-verdict ${analysedMove.cpLoss <= 60 ? 'safe' : 'harmful'}`}>
-                    {analysedMove.cpLoss <= 60
-                      ? '↗ Вихід із теорії, але хід не псує позицію.'
-                      : '⚠ Вихід із теорії послабив дебютний план.'}
-                  </p>
-                )}
-                {analysedMove.openingNote && <p className="opening-note">♟ {analysedMove.openingNote}</p>}
-              </div>
-              <div className="analysis-navigation">
-                <button onClick={() => setAnalysisIndex((index) => Math.max(0, index - 1))} disabled={analysisIndex === 0}><b>‹</b> Назад</button>
-                <button onClick={() => setAnalysisIndex((index) => Math.min(analysisItems.length - 1, index + 1))} disabled={analysisIndex >= analysisItems.length - 1}>Далі <b>›</b></button>
-              </div>
-            </>
-          )}
-          {!analysisBusy && !analysedMove && <p className="analysis-empty">Не вдалося отримати аналіз цієї партії.</p>}
-          <p className="analysis-disclaimer">Позначки визначає локальний Stockfish. «Блискучий» ставиться лише найкращому або майже найкращому ходу з коректною жертвою фігури.</p>
-        </section>
-      )}
-
-      {analysisSummaryOpen && !analysisBusy && playerAnalysis.length > 0 && (
-        <div className="analysis-modal" role="dialog" aria-modal="true" aria-labelledby="analysis-summary-title">
-          <div className="analysis-summary">
-            <button className="summary-close" onClick={() => setAnalysisSummaryOpen(false)} aria-label="Закрити">×</button>
-            <small>Аналіз завершено</small>
-            <h2 id="analysis-summary-title">Рівень цієї партії</h2>
-            <strong className="performance-rating">≈ {performanceRating}</strong>
-            <p>Точність твоїх ходів: <b>{analysisAccuracy}%</b></p>
-            <div className="quality-summary">
-              <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>Теорія</small></div>
-              {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove).symbol}</span><strong>{analysisCounts[label]}</strong><small>{label}</small></div>)}
-            </div>
-            <button className="primary" onClick={() => setAnalysisSummaryOpen(false)}>Перейти до аналізу <span>→</span></button>
-          </div>
-        </div>
-      )}
     </main>
   )
 }

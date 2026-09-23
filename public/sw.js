@@ -1,6 +1,6 @@
-const CACHE = 'debut-offline-v19'
+const CACHE = 'debut-offline-v20'
 const CORE = [
-  './', './index.html', './manifest.webmanifest?v=19',
+  './', './index.html', './manifest.webmanifest?v=20',
   './icon-192-v4.png', './icon-512-v4.png', './apple-touch-icon-v4.png',
   './stockfish/stockfish-19-lite-single.js',
   './stockfish/stockfish-19-lite-single.wasm',

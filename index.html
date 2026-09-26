@@ -10,8 +10,15 @@
     <link rel="manifest" href="./manifest.webmanifest?v=20" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-v4.png" />
     <title>Дебют — шаховий тренер</title>
+    <style>
+      #boot-splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #101514; color: #d9bd73; }
+      #boot-splash span { display: block; font: 76px/1 Georgia, serif; transform-origin: 50% 80%; animation: boot-knight 900ms ease-in-out infinite alternate; }
+      @keyframes boot-knight { from { transform: translateY(5px) rotate(-6deg); opacity: .7; } to { transform: translateY(-7px) rotate(6deg); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { #boot-splash span { animation: none; } }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" aria-hidden="true"><span>♞</span></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

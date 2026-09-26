@@ -1,0 +1,52 @@
+{
+  "identifier": "D3B07001",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {},
+  "subscriptionGroups": [
+    {
+      "id": "D3B07002",
+      "localizations": [],
+      "name": "Дебют Pro",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "3.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "D3B07003",
+          "introductoryOffer": null,
+          "localizations": [
+            { "description": "Unlock all opening lessons and full game analysis.", "displayName": "Debut Pro Monthly", "locale": "en_US" },
+            { "description": "Відкрийте всі уроки дебютів і повний аналіз партій.", "displayName": "Дебют Pro на місяць", "locale": "uk_UA" }
+          ],
+          "productID": "com.ilyaivasyk.debut.pro.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Дебют Pro Monthly",
+          "subscriptionGroupID": "D3B07002",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "29.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "D3B07004",
+          "introductoryOffer": null,
+          "localizations": [
+            { "description": "Unlock all opening lessons and full game analysis.", "displayName": "Debut Pro Yearly", "locale": "en_US" },
+            { "description": "Відкрийте всі уроки дебютів і повний аналіз партій.", "displayName": "Дебют Pro на рік", "locale": "uk_UA" }
+          ],
+          "productID": "com.ilyaivasyk.debut.pro.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Дебют Pro Yearly",
+          "subscriptionGroupID": "D3B07002",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": { "major": 5, "minor": 0 }
+}

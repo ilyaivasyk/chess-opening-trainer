@@ -1,6 +1,7 @@
-const CACHE = 'debut-offline-v20'
+const CACHE_PREFIX = 'debut-offline-'
+const CACHE = `${CACHE_PREFIX}v21`
 const CORE = [
-  './', './index.html', './manifest.webmanifest?v=20',
+  './', './index.html', './privacy.html', './manifest.webmanifest?v=20',
   './icon-192-v4.png', './icon-512-v4.png', './apple-touch-icon-v4.png',
   './stockfish/stockfish-19-lite-single.js',
   './stockfish/stockfish-19-lite-single.wasm',
@@ -19,7 +20,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key)))),
   )
   self.clients.claim()
 })
@@ -28,15 +29,16 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
   const url = new URL(event.request.url)
+  if (url.origin !== self.location.origin) return
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          caches.open(CACHE).then((cache) => cache.put('./index.html', response.clone()))
+          if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()))
           return response
         })
-        .catch(() => caches.match('./index.html')),
+        .catch(async () => (await caches.match(event.request)) || caches.match('./index.html')),
     )
     return
   }

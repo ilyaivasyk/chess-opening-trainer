@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Chess, type Move, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
-import { courses } from './data/courses'
+import { courses, getCatalog, getCourses, type Course, type Locale } from './data/courses'
 import { StockfishEngine, type EngineStrength } from './stockfish'
+import { getPremiumCourses, getPremiumProducts, getPremiumStatus, isNativeIOS, onPremiumStatusChange, purchasePremium, restorePurchases, type PremiumProduct } from './native/purchases'
 
 type Mode = 'coach' | 'practice' | 'exam'
 type Screen = 'home' | 'theory' | 'train' | 'rating'
@@ -13,7 +14,7 @@ type PlayerColor = 'w' | 'b'
 type RatingStage = 'playing' | 'between' | 'complete'
 type ManualOutcome = 'resigned' | 'draw-agreed' | null
 type MoveActor = 'player' | 'engine' | 'course'
-type AnalysisLabel = 'Блискучий' | 'Найкращий' | 'Чудовий' | 'Добрий' | 'Неточність' | 'Помилка' | 'Груба помилка'
+type AnalysisLabel = 'brilliant' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder'
 
 type MoveQuality = {
   cpLoss: number
@@ -49,11 +50,12 @@ type GameMoveRecord = {
   uci: string
   from: Square
   to: Square
+  captured?: Move['captured']
   fenBefore: string
   fenAfter: string
   bookMove: boolean
   openingName: string
-  openingNote?: string
+  openingNote?: { kind: 'f7' } | { kind: 'deviation'; stepIndex: number }
 }
 
 type MoveBadge = {
@@ -70,6 +72,8 @@ type AnalysedMove = GameMoveRecord & {
   bestMove: string | null
   bestMoveSan: string | null
   principalVariationSan: string[]
+  principalVariationFens: string[]
+  principalVariationUci: string[]
   evaluationCp: number
   label: AnalysisLabel
 }
@@ -90,34 +94,257 @@ type Scenario = {
   steps: LessonStep[]
 }
 
-const modes: { id: Mode; name: string; description: string }[] = [
-  { id: 'coach', name: 'Тренер', description: 'Показує хід і пояснює кожне рішення' },
-  { id: 'practice', name: 'Практика', description: 'Ти ходиш сам, перевірка — одразу' },
-  { id: 'exam', name: 'Іспит', description: 'Без підказок, аналіз після дебюту' },
-]
+const ui = {
+  brand: { uk: 'Шаховий тренер', en: 'Chess trainer' },
+  debut: { uk: 'Дебют', en: 'Debut' },
+  level: { uk: 'Рівень', en: 'Level' },
+  coach: { uk: 'Тренер', en: 'Coach' },
+  coachDescription: { uk: 'Показує хід і пояснює кожне рішення', en: 'Shows moves and explains each choice' },
+  practice: { uk: 'Практика', en: 'Practice' },
+  practiceDescription: { uk: 'Ти ходиш сам, перевірка — одразу', en: 'Play on your own with instant feedback' },
+  exam: { uk: 'Іспит', en: 'Exam' },
+  examDescription: { uk: 'Без підказок, аналіз після дебюту', en: 'No hints; review after the opening' },
+  beginner: { uk: 'Початківець', en: 'Beginner' },
+  intermediate: { uk: 'Середній', en: 'Intermediate' },
+  advanced: { uk: 'Досвідчений', en: 'Advanced' },
+  amateur: { uk: 'Любитель', en: 'Amateur' },
+  club: { uk: 'Клубний', en: 'Club' },
+  strongClub: { uk: 'Сильний клубний', en: 'Strong club' },
+  strong: { uk: 'Сильний', en: 'Strong' },
+  maximum: { uk: 'Максимум', en: 'Maximum' },
+  white: { uk: 'білі', en: 'white' },
+  black: { uk: 'чорні', en: 'black' },
+  brilliant: { uk: 'Блискучий', en: 'Brilliant' },
+  best: { uk: 'Найкращий', en: 'Best' },
+  excellent: { uk: 'Чудовий', en: 'Excellent' },
+  good: { uk: 'Добрий', en: 'Good' },
+  inaccuracy: { uk: 'Неточність', en: 'Inaccuracy' },
+  mistake: { uk: 'Помилка', en: 'Mistake' },
+  blunder: { uk: 'Груба помилка', en: 'Blunder' },
+  theory: { uk: 'Теорія', en: 'Theory' },
+  departure: { uk: 'Поза варіантом', en: 'Outside the line' },
+  openingNimzo: { uk: 'Захист Німцовича', en: 'Nimzo-Indian Defense' },
+  openingKingsIndian: { uk: 'Староіндійський захист', en: "King's Indian Defense" },
+  openingSicilian: { uk: 'Сицилійський захист', en: 'Sicilian Defense' },
+  openingCaroKann: { uk: 'Захист Каро — Канн', en: 'Caro-Kann Defense' },
+  openingRuyLopez: { uk: 'Іспанська партія', en: 'Ruy Lopez' },
+  openingQgd: { uk: 'Відхилений ферзевий гамбіт', en: "Queen's Gambit Declined" },
+  openingQueenGambit: { uk: 'Ферзевий гамбіт', en: "Queen's Gambit" },
+  openingLondon: { uk: 'Лондонська система', en: 'London System' },
+  openingTwoKnights: { uk: 'Італійська партія: захист двох коней', en: 'Italian Game: Two Knights Defense' },
+  openingPianissimo: { uk: 'Італійська партія: Джоко-Піанісимо', en: 'Italian Game: Giuoco Pianissimo' },
+  openingGiuocoPiano: { uk: 'Італійська партія: Джоко-Піано', en: 'Italian Game: Giuoco Piano' },
+  openingItalian: { uk: 'Італійська партія', en: 'Italian Game' },
+  openingOpenKnight: { uk: 'Відкрита гра: захист конем c6', en: 'Open Game: Knight on c6' },
+  openingOpen: { uk: 'Відкрита гра', en: 'Open Game' },
+  openingKingPawn: { uk: 'Дебют королівського пішака', en: "King's Pawn Opening" },
+  openingUnknown: { uk: 'Дебют не визначено', en: 'Opening not identified' },
+  unknownError: { uk: 'невідома помилка', en: 'unknown error' },
+  resignedResult: { uk: 'Ти здався. Партію завершено.', en: 'You resigned. The game is over.' },
+  agreedDrawResult: { uk: 'Нічия за згодою.', en: 'Draw by agreement.' },
+  blackMateResult: { uk: 'Мат. Чорні перемогли.', en: 'Checkmate. Black won.' },
+  whiteMateResult: { uk: 'Мат. Білі перемогли.', en: 'Checkmate. White won.' },
+  stalemateResult: { uk: 'Пат. Нічия.', en: 'Stalemate. Draw.' },
+  repetitionResult: { uk: 'Триразове повторення позиції. Нічия.', en: 'Threefold repetition. Draw.' },
+  materialResult: { uk: 'Недостатньо матеріалу. Нічия.', en: 'Insufficient material. Draw.' },
+  drawResult: { uk: 'Нічия.', en: 'Draw.' },
+  endedResult: { uk: 'Партію завершено.', en: 'The game is over.' },
+  victory: { uk: 'Перемога', en: 'Victory' },
+  draw: { uk: 'Нічия', en: 'Draw' },
+  defeat: { uk: 'Поразка', en: 'Defeat' },
+  stockfishNotStarted: { uk: 'Stockfish не запущений', en: 'Stockfish is not running' },
+  f7Idea: { uk: 'Послаблено ідею дебюту: білі втратили тиск на поле f7. Перевір, чи це було виправдано.', en: 'The opening idea weakened: White lost pressure on f7. Check whether this was justified.' },
+  coachStartWhite: { uk: 'Знайди підсвічений хід. Натисни фігуру, потім поле.', en: 'Find the highlighted move. Tap the piece, then the square.' },
+  coachStartBlack: { uk: '{explanation} Тепер знайди відповідь чорних.', en: '{explanation} Now find Black’s reply.' },
+  whiteFirstMove: { uk: 'Білі зробили перший хід.', en: 'White played the first move.' },
+  ratingStartWhite: { uk: 'Перша партія: ти граєш білими. Дограй до завершення.', en: 'Game one: you play White. Finish the game.' },
+  ratingStartBlack: { uk: 'Друга партія: ти граєш чорними. Stockfish робить перший хід.', en: 'Game two: you play Black. Stockfish moves first.' },
+  chooseHighlighted: { uk: 'Обери одне з підсвічених полів.', en: 'Choose one of the highlighted squares.' },
+  illegalMove: { uk: 'Ця фігура не може піти на це поле. Обери підсвічене поле.', en: 'This piece cannot move there. Choose a highlighted square.' },
+  expectedMove: { uk: 'Відхилення від вивченого плану: очікувався хід {move}. {explanation}', en: 'Outside the learned plan: {move} was expected. {explanation}' },
+  outsideExam: { uk: '↗ Це вихід із вивченого варіанта. Після партії Stockfish покаже, чи хід нормальний, чи він послабив дебютний план.', en: '↗ This leaves the learned line. After the game, Stockfish will show whether the move weakened the opening plan.' },
+  outsidePractice: { uk: '↗ {move} — легальний хід, але він виходить із поточного дебютного варіанта.', en: '↗ {move} is legal, but it leaves this opening line.' },
+  tryAgain: { uk: 'Спробуй інакше. Ідея зараз: {explanation}', en: 'Try another move. The idea is: {explanation}' },
+  moveReturned: { uk: 'Хід повернуто. Правильний напрямок підсвічено на дошці. {explanation}', en: 'Move undone. The correct path is highlighted. {explanation}' },
+  theoryFeedback: { uk: '📖 Теорія · {opening}. {explanation}', en: '📖 Theory · {opening}. {explanation}' },
+  evaluatingMove: { uk: 'Оцінюємо хід…', en: 'Evaluating the move…' },
+  ratingMoveError: { uk: 'Stockfish не зміг оцінити хід. Спробуй ще раз.', en: 'Stockfish could not evaluate the move. Please try again.' },
+  ratingWhiteDone: { uk: 'Партію білими завершено. Для оцінки обов’язково зіграй ще одну партію чорними.', en: 'Your White game is complete. Play one more game as Black for an estimate.' },
+  openingDone: { uk: 'Дебют завершено. {explanation} Тепер гра продовжується проти Stockfish.', en: 'Opening complete. {explanation} Now the game continues against Stockfish.' },
+  undoFeedback: { uk: 'Хід повернуто. Правильний маршрут підсвічено. {explanation}', en: 'Move undone. The correct path is highlighted. {explanation}' },
+  continueFeedback: { uk: 'Гра продовжується нестандартно проти Stockfish.', en: 'The game continues outside the opening line against Stockfish.' },
+  stockfishThinking: { uk: 'Stockfish думає…', en: 'Stockfish is thinking…' },
+  yourMove: { uk: 'Твій хід.', en: 'Your move.' },
+  engineMoveError: { uk: 'Stockfish не зміг зробити хід. Спробуй ще раз.', en: 'Stockfish could not move. Please try again.' },
+  retryEngine: { uk: 'Повторити хід Stockfish', en: 'Retry Stockfish move' },
+  retryEvaluation: { uk: 'Повторити оцінювання ходу', en: 'Retry move evaluation' },
+  repeatIdea: { uk: 'Повтори ідею: {explanation}', en: 'Try the idea again: {explanation}' },
+  resignedFeedback: { uk: 'Ти здався. Партію завершено — тепер можна переглянути повний аналіз.', en: 'You resigned. The game is over. You can now review it.' },
+  drawThinking: { uk: 'Stockfish оцінює пропозицію нічиєї…', en: 'Stockfish is considering the draw offer…' },
+  drawAccepted: { uk: 'Stockfish погодився на нічию. Можна перейти до аналізу партії.', en: 'Stockfish accepted the draw. You can review the game.' },
+  drawDeclined: { uk: 'Stockfish відхилив нічию: у позиції ще є помітні шанси на перемогу. Твій хід.', en: 'Stockfish declined the draw: the position still has winning chances. Your move.' },
+  drawError: { uk: 'Не вдалося оцінити пропозицію. Спробуй ще раз.', en: 'Could not evaluate the draw offer. Please try again.' },
+  analysisStopped: { uk: 'Не вдалося завершити аналіз.', en: 'Could not finish the review.' },
+  tryReviewAgain: { uk: 'Спробувати ще раз', en: 'Try again' },
+  close: { uk: 'Закрити', en: 'Close' },
+  reviewProTitle: { uk: 'Вивчай більше. Аналізуй кожну партію.', en: 'Learn more. Review every game.' },
+  reviewProDescription: { uk: 'Відкрий 49 додаткових дебютів і повний аналіз партій зі Stockfish.', en: 'Unlock 49 more openings and full game review with Stockfish.' },
+  proBenefitCatalog: { uk: '60 дебютів для гри білими й чорними', en: '60 openings for White and Black' },
+  proBenefitReview: { uk: 'Повний аналіз після кожної партії', en: 'Full review after every game' },
+  proBenefitLines: { uk: 'Пояснення ходів і найкраща лінія', en: 'Move explanations and the best line' },
+  yearly: { uk: 'Річна підписка', en: 'Yearly subscription' },
+  monthly: { uk: 'Місячна підписка', en: 'Monthly subscription' },
+  productsUnavailable: { uk: 'Підписки зараз недоступні. Спробуй ще раз пізніше.', en: 'Subscriptions are unavailable now. Please try again later.' },
+  restore: { uk: 'Відновити покупки', en: 'Restore purchases' },
+  iosOnly: { uk: 'Підписка доступна в застосунку для iPhone.', en: 'Subscriptions are available in the iPhone app.' },
+  purchasePendingVerification: { uk: 'Покупку ще не підтверджено. Спробуй відновити її трохи пізніше.', en: 'The purchase is not verified yet. Try restoring it shortly.' },
+  purchasePending: { uk: 'Покупка очікує підтвердження.', en: 'The purchase is pending approval.' },
+  purchaseFailed: { uk: 'Не вдалося оформити підписку. Спробуй ще раз.', en: 'Could not complete the subscription. Please try again.' },
+  noSubscription: { uk: 'Активної підписки не знайдено.', en: 'No active subscription was found.' },
+  restoreFailed: { uk: 'Не вдалося відновити покупки. Спробуй ще раз.', en: 'Could not restore purchases. Please try again.' },
+  lessonLoadFailed: { uk: 'Не вдалося завантажити урок. Перевір підписку та спробуй ще раз.', en: 'Could not load the lesson. Check your subscription and try again.' },
+  appStoreLegal: { uk: 'Оплата й керування підпискою здійснюються через App Store.', en: 'Payment and subscription management are handled by the App Store.' },
+  subscriptionRenews: { uk: 'Підписка поновлюється автоматично, доки її не скасувати в налаштуваннях Apple ID.', en: 'The subscription renews automatically until canceled in Apple ID settings.' },
+  privacyPolicy: { uk: 'Політика конфіденційності', en: 'Privacy Policy' },
+  termsOfUse: { uk: 'Умови використання', en: 'Terms of Use' },
+  ratingRepeat: { uk: 'Повторити оцінювання', en: 'Repeat rating estimate' },
+  ratingDiscover: { uk: 'Визначити мій рівень', en: 'Estimate my level' },
+  ratingRepeatDetail: { uk: 'Знову зіграти білими й чорними', en: 'Play as White and Black again' },
+  ratingDiscoverDetail: { uk: '2 повні партії: білими й чорними', en: '2 full games: White and Black' },
+  openingTraining: { uk: 'Тренування дебютів', en: 'Opening training' },
+  trainingDetail: { uk: 'Підказки, практика та іспит', en: 'Hints, practice, and exam' },
+  chooseOpening: { uk: 'Обери дебют', en: 'Choose an opening' },
+  catalogCount: { uk: '{free} безкоштовно · {total} у каталозі', en: '{free} free · {total} in the catalog' },
+  all: { uk: 'Усі', en: 'All' },
+  playWhiteFilter: { uk: 'За білих', en: 'As White' },
+  playBlackFilter: { uk: 'За чорних', en: 'As Black' },
+  bothColors: { uk: 'Навчання за білих і чорних', en: 'Learn as White and Black' },
+  available: { uk: 'Доступно', en: 'Available' },
+  sideLabel: { uk: 'Сторона в дебюті', en: 'Opening side' },
+  playWhite: { uk: 'Грати білими', en: 'Play as White' },
+  whitePlan: { uk: 'Будувати план дебюту', en: 'Build an opening plan' },
+  playBlack: { uk: 'Грати чорними', en: 'Play as Black' },
+  blackPlan: { uk: 'Вивчити правильну відповідь', en: 'Learn the right reply' },
+  premiumLesson: { uk: 'Урок доступний з Дебют Pro.', en: 'This lesson is available with Debut Pro.' },
+  lessonLoading: { uk: 'Завантажуємо урок…', en: 'Loading the lesson…' },
+  openingSource: { uk: 'Джерело дебюту: Lichess', en: 'Opening source: Lichess' },
+  viewSubscription: { uk: 'Переглянути підписку', en: 'View subscription' },
+  variation: { uk: 'Варіант · {name}', en: 'Variation · {name}' },
+  variantsAvailable: { uk: '{count} доступно', en: '{count} available' },
+  randomVariation: { uk: '🎲 Випадковий із {count}', en: '🎲 Random from {count}' },
+  mode: { uk: 'Режим', en: 'Mode' },
+  surprises: { uk: 'Несподівані варіанти', en: 'Surprise variations' },
+  surprisesDetail: { uk: 'Stockfish перевірятиме різними продовженнями', en: 'Stockfish will use different continuations' },
+  opponentStrength: { uk: 'Сила суперника', en: 'Opponent strength' },
+  strengthDetail: { uk: '{value} · рейтинг і тренування', en: '{value} · rating and training' },
+  startTraining: { uk: 'Почати тренування', en: 'Start training' },
+  unlockPro: { uk: 'Відкрити Дебют Pro', en: 'Unlock Debut Pro' },
+  installIphone: { uk: 'На iPhone: Safari → Поділитися → На початковий екран', en: 'On iPhone: Safari → Share → Add to Home Screen' },
+  back: { uk: 'Назад', en: 'Back' },
+  beforeGame: { uk: 'Перед грою · {color}', en: 'Before the game · {color}' },
+  skip: { uk: 'Пропустити', en: 'Skip' },
+  aboutOpening: { uk: 'Про що цей дебют', en: 'About this opening' },
+  blackMainPlan: { uk: 'Твій головний план за чорних: {goals}', en: 'Your main plan as Black: {goals}' },
+  history: { uk: 'Про дебют', en: 'About this opening' },
+  yourGoal: { uk: 'Твоя мета · {color}', en: 'Your goal · {color}' },
+  opponentPlan: { uk: 'План суперника · {color}', en: 'Opponent plan · {color}' },
+  keySquares: { uk: 'Ключові поля', en: 'Key squares' },
+  caution: { uk: 'Не поспішай', en: 'Take your time' },
+  watchWhitePlan: { uk: 'Стеж за планом білих: {white} Твоя відповідь: {black}', en: 'Watch White’s plan: {white} Your reply: {black}' },
+  gameReport: { uk: 'Звіт про партію', en: 'Game report' },
+  analysisFinished: { uk: 'Аналіз завершено', en: 'Review complete' },
+  approximatePerformance: { uk: 'Приблизний рівень цієї партії', en: 'Approximate level for this game' },
+  yourAccuracy: { uk: 'Твоя точність', en: 'Your accuracy' },
+  gameFlow: { uk: 'Перебіг партії', en: 'Game progress' },
+  whiteBlackAdvantage: { uk: 'перевага білих / чорних', en: 'White / Black advantage' },
+  evaluationChart: { uk: 'Графік оцінки позицій', en: 'Position evaluation chart' },
+  youColor: { uk: 'Ти · {color}', en: 'You · {color}' },
+  stockfishLevel: { uk: 'Stockfish · {level}', en: 'Stockfish · {level}' },
+  yourMoves: { uk: 'Твої ходи', en: 'Your moves' },
+  viewReview: { uk: 'Дивитися аналіз', en: 'View review' },
+  gameReview: { uk: 'Аналіз партії', en: 'Game review' },
+  localEngine: { uk: 'Локальний Stockfish · MAX', en: 'Local Stockfish · MAX' },
+  closeReview: { uk: 'Закрити аналіз', en: 'Close review' },
+  reviewWorking: { uk: 'Аналізуємо партію', en: 'Reviewing the game' },
+  reviewWorkingDetail: { uk: 'Stockfish перевіряє позиції та будує першу лінію.', en: 'Stockfish is checking positions and the best line.' },
+  bookMove: { uk: 'Книжковий хід у цьому варіанті.', en: 'A book move in this variation.' },
+  keepsEvaluation: { uk: 'Хід зберігає найкращу оцінку позиції.', en: 'This move keeps the best position evaluation.' },
+  lostPawns: { uk: 'Втрачено приблизно {amount} пішака оцінки.', en: 'About {amount} pawns of evaluation lost.' },
+  bestMove: { uk: 'Найкращий хід', en: 'Best move' },
+  bestLine: { uk: 'Перша лінія:', en: 'Best line:' },
+  replayLine: { uk: 'Переграти лінію', en: 'Replay line' },
+  exitLine: { uk: 'Повернутися до партії', en: 'Return to game' },
+  lineStart: { uk: 'Позиція до ходу', en: 'Position before move' },
+  lineStep: { uk: 'Хід {current} із {total}', en: 'Move {current} of {total}' },
+  previousLine: { uk: 'Попередній хід лінії', en: 'Previous line move' },
+  nextLine: { uk: 'Наступний хід лінії', en: 'Next line move' },
+  analysisBoard: { uk: 'Шахова дошка аналізу', en: 'Review chessboard' },
+  positionEvaluation: { uk: 'Оцінка позиції {value}', en: 'Position evaluation {value}' },
+  evaluationUnavailable: { uk: 'Оцінка для цього кроку не розрахована', en: 'Evaluation is not calculated for this step' },
+  kingLost: { uk: 'Король програв', en: 'King lost' },
+  kingWon: { uk: 'Король переміг', en: 'King won' },
+  moveNavigation: { uk: 'Перехід між ходами', en: 'Move navigation' },
+  previousMove: { uk: 'Попередній хід', en: 'Previous move' },
+  nextMove: { uk: 'Наступний хід', en: 'Next move' },
+  reviewUnavailable: { uk: 'Не вдалося отримати аналіз цієї партії.', en: 'Could not review this game.' },
+  ratingGame: { uk: 'Оціночна партія', en: 'Rating game' },
+  againstStockfish: { uk: 'Проти Stockfish · {level}', en: 'Against Stockfish · {level}' },
+  restart: { uk: 'Почати знову', en: 'Start again' },
+  ratingLevel: { uk: 'Суперник {level} · аналіз MAX · {color}', en: 'Opponent {level} · MAX review · {color}' },
+  coachLevel: { uk: '{mode} · {color}', en: '{mode} · {color}' },
+  ratingReady: { uk: 'Рівень визначено', en: 'Level estimated' },
+  ratingHalfway: { uk: 'Половина оцінювання готова', en: 'Halfway through the estimate' },
+  playWithoutHints: { uk: 'Грай без підказок', en: 'Play without hints' },
+  middlegame: { uk: 'Мітельшпіль', en: 'Middlegame' },
+  openingComplete: { uk: 'Дебют завершено', en: 'Opening complete' },
+  selectMoves: { uk: 'Обирай ходи нижче або переходь кнопками назад і вперед.', en: 'Select moves below or use the back and forward buttons.' },
+  ratingInstructions: { uk: 'Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.', en: 'Finish the game. Your estimate appears after two full games, as White and Black. Analysis runs on your phone.' },
+  examInstructions: { uk: 'Зіграй дебют самостійно. Результат побачиш після завершення.', en: 'Play the opening on your own. See the result afterward.' },
+  deviationTitle: { uk: 'Відхилення від дебюту', en: 'Opening deviation' },
+  deviationDetail: { uk: 'Хід залишився на дошці. За вивченим варіантом очікувався хід {from} → {to}.', en: 'Your move stays on the board. The learned line expected {from} → {to}.' },
+  undoMove: { uk: 'Повернути хід', en: 'Undo move' },
+  continueOutside: { uk: 'Продовжити нестандартно', en: 'Continue outside the line' },
+  tryTheoryMove: { uk: 'Спробуй теоретичний хід', en: 'Try the theory move' },
+  moveFromTo: { uk: 'Зроби хід із {from} на підсвічене поле {to}.', en: 'Move from {from} to the highlighted square {to}.' },
+  opponentMaterial: { uk: 'Матеріал суперника', en: 'Opponent material' },
+  board: { uk: 'Шахова дошка', en: 'Chessboard' },
+  yourMaterial: { uk: 'Твій матеріал', en: 'Your material' },
+  reviewReady: { uk: 'Аналіз готовий', en: 'Review ready' },
+  gameFinished: { uk: 'Партію завершено', en: 'Game over' },
+  stockfishThinkingShort: { uk: 'Stockfish думає', en: 'Stockfish thinking' },
+  yourTurn: { uk: 'Твій хід', en: 'Your turn' },
+  stockfishTurn: { uk: 'Хід Stockfish', en: 'Stockfish to move' },
+  noHints: { uk: 'Без підказок', en: 'No hints' },
+  rewindLesson: { uk: 'Повернути попередній хід і пояснення', en: 'Go back one move and explanation' },
+  offerDraw: { uk: 'Запропонувати нічию', en: 'Offer draw' },
+  resign: { uk: 'Здатися', en: 'Resign' },
+  playBlackGame: { uk: 'Зіграти другу партію чорними', en: 'Play the second game as Black' },
+  approximateRating: { uk: 'Приблизна оцінка гри', en: 'Approximate playing level' },
+  ratingResults: { uk: 'Діапазон: {low}–{high}. Точність ходів: {accuracy}%. Серйозних помилок: {errors}, із них грубих: {blunders}. Завершено обидві партії: білими й чорними.', en: 'Range: {low}–{high}. Move accuracy: {accuracy}%. Serious errors: {errors}, including {blunders} blunders. Both games are complete, as White and Black.' },
+  analyseWholeGame: { uk: 'Проаналізувати всю партію', en: 'Review the whole game' },
+} as const
 
-const categories: { id: Category; name: string; note: string }[] = [
-  { id: 'beginner', name: 'Початківець', note: '5 дебютів' },
-  { id: 'intermediate', name: 'Середній', note: '2 дебюти' },
-  { id: 'advanced', name: 'Досвідчений', note: '2 дебюти' },
-]
-
-const plannedCourses: Record<Category, string[]> = {
-  beginner: ['Шотландська партія', 'Віденська партія', 'Дебют чотирьох коней'],
-  intermediate: ['Французький захист', 'Захист Пірца', 'Голландський захист'],
-  advanced: ['Захист Грюнфельда', 'Каталонський початок', 'Англійський початок'],
+type UiKey = keyof typeof ui
+function translate(locale: Locale, key: UiKey, values: Record<string, string | number> = {}) {
+  let value: string = ui[key][locale]
+  for (const [name, replacement] of Object.entries(values)) value = value.replaceAll(`{${name}}`, String(replacement))
+  return value
 }
 
-const strengthOptions: { value: EngineStrength; label: string }[] = [
-  { value: 800, label: 'Початківець' },
-  { value: 1200, label: 'Любитель' },
-  { value: 1600, label: 'Клубний' },
-  { value: 1800, label: 'Сильний клубний' },
-  { value: 2000, label: 'Сильний' },
-  { value: 3000, label: 'Максимум' },
+const modes: { id: Mode; name: UiKey; description: UiKey }[] = [
+  { id: 'coach', name: 'coach', description: 'coachDescription' },
+  { id: 'practice', name: 'practice', description: 'practiceDescription' },
+  { id: 'exam', name: 'exam', description: 'examDescription' },
 ]
-
-const analysisLabels: AnalysisLabel[] = ['Блискучий', 'Найкращий', 'Чудовий', 'Добрий', 'Неточність', 'Помилка', 'Груба помилка']
+const categories: { id: Category; name: UiKey }[] = [
+  { id: 'beginner', name: 'beginner' }, { id: 'intermediate', name: 'intermediate' }, { id: 'advanced', name: 'advanced' },
+]
+const strengthOptions: { value: EngineStrength; label: UiKey }[] = [
+  { value: 800, label: 'beginner' }, { value: 1200, label: 'amateur' },
+  { value: 1600, label: 'club' }, { value: 1800, label: 'strongClub' },
+  { value: 2000, label: 'strong' }, { value: 3000, label: 'maximum' },
+]
+const analysisLabels: AnalysisLabel[] = ['brilliant', 'best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder']
 
 const ratingKey = 'player-rating-v3'
 const samplesKey = 'placement-pair-v3'
@@ -178,13 +405,17 @@ function scenarioVariant(scenario: Scenario) {
   return scenario.id.replace(/^(white|black)-/, '')
 }
 
-function buildOpeningBook() {
+function positionKey(fen: string) {
+  return fen.split(' ').slice(0, 4).join(' ')
+}
+
+function buildOpeningBook(courseList: Course[]) {
   const book = new Set<string>()
-  const scenarios = courses.flatMap((course) => [...course.scenarios, ...course.blackScenarios]) as Scenario[]
+  const scenarios = courseList.flatMap((course) => [...course.scenarios, ...course.blackScenarios]) as Scenario[]
   for (const scenario of scenarios) {
     const position = new Chess()
     const add = (uci: string) => {
-      book.add(`${position.fen()}|${uci}`)
+      book.add(`${positionKey(position.fen())}|${uci}`)
       const move = moveParts(uci)
       position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
     }
@@ -197,40 +428,38 @@ function buildOpeningBook() {
   return book
 }
 
-const openingBook = buildOpeningBook()
-
-function detectOpening(moves: string[]) {
+function detectOpening(moves: string[], locale: Locale) {
   const starts = (...line: string[]) => line.every((move, index) => moves[index] === move)
-  if (starts('d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4')) return 'Захист Німцовича'
-  if (starts('d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'f8g7')) return 'Староіндійський захист'
-  if (starts('e2e4', 'c7c5')) return 'Сицилійський захист'
-  if (starts('e2e4', 'c7c6')) return 'Захист Каро — Канн'
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5')) return 'Іспанська партія'
-  if (starts('d2d4', 'd7d5', 'c2c4', 'e7e6')) return 'Відхилений ферзевий гамбіт'
-  if (starts('d2d4', 'd7d5', 'c2c4')) return 'Ферзевий гамбіт'
-  if (starts('d2d4', 'd7d5', 'g1f3', 'g8f6', 'c1f4') || starts('d2d4', 'g8f6', 'g1f3', 'd7d5', 'c1f4')) return 'Лондонська система'
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6')) return 'Італійська партія: захист двох коней'
+  if (starts('d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4')) return translate(locale, 'openingNimzo')
+  if (starts('d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'f8g7')) return translate(locale, 'openingKingsIndian')
+  if (starts('e2e4', 'c7c5')) return translate(locale, 'openingSicilian')
+  if (starts('e2e4', 'c7c6')) return translate(locale, 'openingCaroKann')
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5')) return translate(locale, 'openingRuyLopez')
+  if (starts('d2d4', 'd7d5', 'c2c4', 'e7e6')) return translate(locale, 'openingQgd')
+  if (starts('d2d4', 'd7d5', 'c2c4')) return translate(locale, 'openingQueenGambit')
+  if (starts('d2d4', 'd7d5', 'g1f3', 'g8f6', 'c1f4') || starts('d2d4', 'g8f6', 'g1f3', 'd7d5', 'c1f4')) return translate(locale, 'openingLondon')
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6')) return translate(locale, 'openingTwoKnights')
   if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5')) {
-    if (moves.includes('c2c3') && moves.includes('d2d3')) return 'Італійська партія: Джоко-Піанісимо'
-    return 'Італійська партія: Джоко-Піано'
+    if (moves.includes('c2c3') && moves.includes('d2d3')) return translate(locale, 'openingPianissimo')
+    return translate(locale, 'openingGiuocoPiano')
   }
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4')) return 'Італійська партія'
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6')) return 'Відкрита гра: захист конем c6'
-  if (starts('e2e4', 'e7e5')) return 'Відкрита гра'
-  if (starts('e2e4')) return 'Дебют королівського пішака'
-  return 'Дебют не визначено'
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4')) return translate(locale, 'openingItalian')
+  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6')) return translate(locale, 'openingOpenKnight')
+  if (starts('e2e4', 'e7e5')) return translate(locale, 'openingOpen')
+  if (starts('e2e4')) return translate(locale, 'openingKingPawn')
+  return translate(locale, 'openingUnknown')
 }
 
-function badgeForAnalysis(move: AnalysedMove): MoveBadge {
-  if (move.bookMove) return { square: move.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
+function badgeForAnalysis(move: AnalysedMove, locale: Locale): MoveBadge {
+  if (move.bookMove) return { square: move.to, symbol: '📖', label: translate(locale, 'theory'), tone: 'theory' }
   const badges: Record<AnalysedMove['label'], Omit<MoveBadge, 'square'>> = {
-    'Блискучий': { symbol: '!!', label: 'Блискучий', tone: 'brilliant' },
-    'Найкращий': { symbol: '★', label: 'Найкращий', tone: 'great' },
-    'Чудовий': { symbol: '!', label: 'Чудовий', tone: 'great' },
-    'Добрий': { symbol: '✓', label: 'Добрий', tone: 'good' },
-    'Неточність': { symbol: '?!', label: 'Неточність', tone: 'inaccuracy' },
-    'Помилка': { symbol: '?', label: 'Помилка', tone: 'mistake' },
-    'Груба помилка': { symbol: '??', label: 'Груба помилка', tone: 'blunder' },
+    brilliant: { symbol: '!!', label: translate(locale, 'brilliant'), tone: 'brilliant' },
+    best: { symbol: '★', label: translate(locale, 'best'), tone: 'great' },
+    excellent: { symbol: '!', label: translate(locale, 'excellent'), tone: 'great' },
+    good: { symbol: '✓', label: translate(locale, 'good'), tone: 'good' },
+    inaccuracy: { symbol: '?!', label: translate(locale, 'inaccuracy'), tone: 'inaccuracy' },
+    mistake: { symbol: '?', label: translate(locale, 'mistake'), tone: 'mistake' },
+    blunder: { symbol: '??', label: translate(locale, 'blunder'), tone: 'blunder' },
   }
   return { square: move.to, ...badges[move.label] }
 }
@@ -248,27 +477,22 @@ function materialBalance(position: Chess, color: PlayerColor) {
   return position.board().flat().reduce((total, piece) => total + (piece ? values[piece.type] * (piece.color === color ? 1 : -1) : 0), 0)
 }
 
-function capturedMaterial(position: Chess, capturer: PlayerColor) {
+function capturedMaterial(moves: { color: PlayerColor; captured?: Move['captured'] }[], capturer: PlayerColor) {
   const victim = capturer === 'w' ? 'b' : 'w'
-  const initial = { p: 8, n: 2, b: 2, r: 2, q: 1 }
-  const values = { p: 1, n: 3, b: 3, r: 5, q: 9 }
   const symbols = victim === 'w'
     ? { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' }
     : { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' }
-  const remaining = { p: 0, n: 0, b: 0, r: 0, q: 0 }
-  position.board().flat().forEach((piece) => {
-    if (piece?.color === victim && piece.type !== 'k') remaining[piece.type] += 1
-  })
-  const order: (keyof typeof initial)[] = ['q', 'r', 'b', 'n', 'p']
-  const pieces = order.flatMap((piece) => Array(Math.max(0, initial[piece] - remaining[piece])).fill(symbols[piece]))
-  const points = order.reduce((total, piece) => total + Math.max(0, initial[piece] - remaining[piece]) * values[piece], 0)
-  return { pieces, points }
+  const order = ['q', 'r', 'b', 'n', 'p'] as const
+  const captures = moves.filter((move) => move.color === capturer && move.captured && move.captured !== 'k').map((move) => move.captured as (typeof order)[number])
+  const pieces = order.flatMap((piece) => captures.filter((captured) => captured === piece).map(() => symbols[piece]))
+  return { pieces }
 }
 
 function isGoodPieceSacrifice(move: GameMoveRecord, cpLoss: number, beforeScore: number, afterScore: number) {
   const before = new Chess(move.fenBefore)
   const movedPiece = before.get(move.from)
   if (!movedPiece || !['n', 'b', 'r', 'q'].includes(movedPiece.type) || cpLoss > 25 || beforeScore >= 500 || -afterScore < -150) return false
+  if (before.isAttacked(move.from, move.color === 'w' ? 'b' : 'w')) return false
   const balanceBefore = materialBalance(before, move.color)
   const after = new Chess(move.fenAfter)
   return after.moves({ verbose: true })
@@ -281,13 +505,13 @@ function isGoodPieceSacrifice(move: GameMoveRecord, cpLoss: number, beforeScore:
 }
 
 function moveLabel(winDrop: number, bestMove: string | null, playedMove: string, brilliant: boolean): AnalysisLabel {
-  if (brilliant) return 'Блискучий'
-  if (bestMove === playedMove || winDrop <= .5) return 'Найкращий'
-  if (winDrop <= 2) return 'Чудовий'
-  if (winDrop <= 5) return 'Добрий'
-  if (winDrop <= 10) return 'Неточність'
-  if (winDrop <= 20) return 'Помилка'
-  return 'Груба помилка'
+  if (brilliant) return 'brilliant'
+  if (bestMove === playedMove || winDrop <= .5) return 'best'
+  if (winDrop <= 2) return 'excellent'
+  if (winDrop <= 5) return 'good'
+  if (winDrop <= 10) return 'inaccuracy'
+  if (winDrop <= 20) return 'mistake'
+  return 'blunder'
 }
 
 function variationToSan(fen: string, moves: string[], limit = 6) {
@@ -295,11 +519,24 @@ function variationToSan(fen: string, moves: string[], limit = 6) {
   const san: string[] = []
   for (const uci of moves.slice(0, limit)) {
     const move = moveParts(uci)
-    const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
-    if (!played) break
-    san.push(played.san)
+    try {
+      san.push(position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' }).san)
+    } catch { break }
   }
   return san
+}
+
+function variationPositions(fen: string, moves: string[]) {
+  const position = new Chess(fen)
+  const positions = [fen]
+  for (const uci of moves) {
+    const move = moveParts(uci)
+    try {
+      position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+      positions.push(position.fen())
+    } catch { break }
+  }
+  return positions
 }
 
 function gamePerformance(accuracy: number, opponent: EngineStrength, score: number) {
@@ -309,23 +546,23 @@ function gamePerformance(accuracy: number, opponent: EngineStrength, score: numb
   return Math.max(100, Math.min(2800, Math.round(((quality + resultRating) / 2) / 50) * 50))
 }
 
-function gameResultText(position: Chess, outcome: ManualOutcome) {
-  if (outcome === 'resigned') return 'Ти здався. Партію завершено.'
-  if (outcome === 'draw-agreed') return 'Нічия за згодою.'
-  if (position.isCheckmate()) return position.turn() === 'w' ? 'Мат. Чорні перемогли.' : 'Мат. Білі перемогли.'
-  if (position.isStalemate()) return 'Пат. Нічия.'
-  if (position.isThreefoldRepetition()) return 'Триразове повторення позиції. Нічия.'
-  if (position.isInsufficientMaterial()) return 'Недостатньо матеріалу. Нічия.'
-  if (position.isDraw()) return 'Нічия.'
-  return 'Партію завершено.'
+function gameResultText(position: Chess, outcome: ManualOutcome, locale: Locale) {
+  if (outcome === 'resigned') return translate(locale, 'resignedResult')
+  if (outcome === 'draw-agreed') return translate(locale, 'agreedDrawResult')
+  if (position.isCheckmate()) return translate(locale, position.turn() === 'w' ? 'blackMateResult' : 'whiteMateResult')
+  if (position.isStalemate()) return translate(locale, 'stalemateResult')
+  if (position.isThreefoldRepetition()) return translate(locale, 'repetitionResult')
+  if (position.isInsufficientMaterial()) return translate(locale, 'materialResult')
+  if (position.isDraw()) return translate(locale, 'drawResult')
+  return translate(locale, 'endedResult')
 }
 
 function qualityClass(label: AnalysedMove['label']) {
-  if (label === 'Блискучий') return 'brilliant'
-  if (label === 'Найкращий' || label === 'Чудовий') return 'great'
-  if (label === 'Добрий') return 'good'
-  if (label === 'Неточність') return 'inaccuracy'
-  if (label === 'Помилка') return 'mistake'
+  if (label === 'brilliant') return 'brilliant'
+  if (label === 'best' || label === 'excellent') return 'great'
+  if (label === 'good') return 'good'
+  if (label === 'inaccuracy') return 'inaccuracy'
+  if (label === 'mistake') return 'mistake'
   return 'blunder'
 }
 
@@ -348,11 +585,11 @@ function evaluationLabel(centipawns: number) {
 
 function graphPointColor(move: AnalysedMove) {
   if (move.bookMove) return '#9b74c7'
-  if (move.label === 'Блискучий') return '#27b7b6'
-  if (move.label === 'Найкращий' || move.label === 'Чудовий') return '#72b64b'
-  if (move.label === 'Добрий') return '#89a892'
-  if (move.label === 'Неточність') return '#e5b534'
-  if (move.label === 'Помилка') return '#ed832f'
+  if (move.label === 'brilliant') return '#27b7b6'
+  if (move.label === 'best' || move.label === 'excellent') return '#72b64b'
+  if (move.label === 'good') return '#89a892'
+  if (move.label === 'inaccuracy') return '#e5b534'
+  if (move.label === 'mistake') return '#ed832f'
   return '#e04b43'
 }
 
@@ -363,7 +600,20 @@ function App() {
   const gameSession = useRef(0)
   const lastDropAt = useRef(0)
   const audioContext = useRef<AudioContext | null>(null)
+  const reviewMovesRef = useRef<HTMLDivElement | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
+  const [locale, setLocale] = useState<Locale>(() => {
+    const saved = localStorage.getItem('locale')
+    if (saved === 'uk' || saved === 'en') return saved
+    return (navigator.languages[0] ?? navigator.language).toLowerCase().startsWith('uk') ? 'uk' : 'en'
+  })
+  const [premium, setPremium] = useState(false)
+  const [premiumCourses, setPremiumCourses] = useState<Course[]>([])
+  const [products, setProducts] = useState<PremiumProduct[]>([])
+  const [paywallOpen, setPaywallOpen] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [purchaseBusy, setPurchaseBusy] = useState(false)
+  const [purchaseMessage, setPurchaseMessage] = useState('')
   const [category, setCategory] = useState<Category>('beginner')
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [colorFilter, setColorFilter] = useState<ColorFilter>('all')
@@ -383,33 +633,57 @@ function App() {
   const [practiceCorrection, setPracticeCorrection] = useState(false)
   const [practiceDeviation, setPracticeDeviation] = useState(false)
   const [thinking, setThinking] = useState(false)
+  const [engineFailure, setEngineFailure] = useState<'rating-evaluation' | 'engine-move' | null>(null)
   const [freePlay, setFreePlay] = useState(false)
-  const [mistakes, setMistakes] = useState<string[]>([])
   const [manualOutcome, setManualOutcome] = useState<ManualOutcome>(null)
   const [strengthMenuOpen, setStrengthMenuOpen] = useState(false)
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [analysisSummaryOpen, setAnalysisSummaryOpen] = useState(false)
   const [analysisBusy, setAnalysisBusy] = useState(false)
   const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [analysisError, setAnalysisError] = useState('')
   const [analysisItems, setAnalysisItems] = useState<AnalysedMove[]>([])
   const [analysisIndex, setAnalysisIndex] = useState(0)
+  const [variationPly, setVariationPly] = useState<number | null>(null)
   const [ratingMoves, setRatingMoves] = useState<MoveQuality[]>([])
   const [ratingResult, setRatingResult] = useState<RatingResult | null>(null)
   const [playerColor, setPlayerColor] = useState<PlayerColor>('w')
   const [ratingStage, setRatingStage] = useState<RatingStage>('playing')
+  const t = (key: UiKey, values?: Record<string, string | number>) => translate(locale, key, values)
+  const colorName = (color: PlayerColor) => t(color === 'w' ? 'white' : 'black')
   const savedRating = readJson<RatingResult | null>(ratingKey, null)
-  const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0]
-  const visibleCourses = courses.filter((course) => course.category === category)
-  const visiblePlannedCourses = plannedCourses[category]
+  const localizedCourses = getCourses(locale)
+  const availableCourses = [...localizedCourses, ...premiumCourses]
+  const catalog = getCatalog(locale)
+  const selectedEntry = catalog.find((course) => course.id === selectedCourseId) ?? catalog[0]
+  const selectedLesson = availableCourses.find((course) => course.id === selectedCourseId)
+  const selectedCourse = selectedLesson ?? localizedCourses[0]
+  const visibleCourses = catalog.filter((course) => course.category === category)
+  const openingBook = useMemo(() => buildOpeningBook(availableCourses), [locale, premiumCourses])
 
-  const current = scenario.steps[step]
-  const progress = Math.min(100, Math.round((step / scenario.steps.length) * 100))
+  const activeScenario = (trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios).find((item) => item.id === scenario.id) ?? scenario
+  const current = activeScenario.steps[step]
+  const progress = Math.min(100, Math.round((step / activeScenario.steps.length) * 100))
   const hint = screen === 'train' && current && (mode === 'coach' || practiceCorrection) ? moveParts(current.userMove) : null
   const playerSide = screen === 'rating' ? playerColor : trainingColor
   const gameFinished = Boolean(manualOutcome) || game.current.isGameOver()
   const analysedMove = analysisItems[analysisIndex]
-  const displayedFen = analysisOpen && analysedMove ? analysedMove.fenAfter : fen
-  const displayedBadge = analysisOpen && analysedMove ? badgeForAnalysis(analysedMove) : moveBadge
+  const analysisOpeningName = analysedMove ? detectOpening(analysisItems.slice(0, analysisIndex + 1).map((item) => item.uci), locale) : ''
+  const analysisOpeningNote = analysedMove?.openingNote?.kind === 'f7' ? t('f7Idea')
+    : analysedMove?.openingNote?.kind === 'deviation' ? t('expectedMove', {
+      move: activeScenario.steps[analysedMove.openingNote.stepIndex]?.userMove ?? '',
+      explanation: activeScenario.steps[analysedMove.openingNote.stepIndex]?.explanation ?? '',
+    }) : ''
+  const displayedFen = analysisOpen && analysedMove
+    ? variationPly === null ? analysedMove.fenAfter : analysedMove.principalVariationFens[variationPly] ?? analysedMove.fenAfter
+    : fen
+  const displayedBadge = analysisOpen && analysedMove
+    ? variationPly === null ? badgeForAnalysis(analysedMove, locale) : null
+    : moveBadge
+  const displayedLastMove = analysisOpen && analysedMove
+    ? variationPly === null ? { from: analysedMove.from, to: analysedMove.to }
+      : variationPly > 0 ? moveParts(analysedMove.principalVariationUci[variationPly - 1]) : null
+    : lastMove
   const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
   const opponentAnalysis = analysisItems.filter((item) => item.color !== playerSide)
   const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(playerAnalysis)) : 0
@@ -418,23 +692,34 @@ function App() {
   const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore)
   const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
   const bookMoveCount = playerAnalysis.filter((item) => item.bookMove).length
-  const resultTitle = playerScore === 1 ? 'Перемога' : playerScore === .5 ? 'Нічия' : 'Поразка'
+  const resultTitle = t(playerScore === 1 ? 'victory' : playerScore === .5 ? 'draw' : 'defeat')
   const displayedPosition = useMemo(() => new Chess(displayedFen), [displayedFen])
   const checkedKingSquare = displayedPosition.isCheck() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
   const mateLoserSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
   const mateWinnerSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn() === 'w' ? 'b' : 'w') : null
   const currentEvaluation = analysedMove?.evaluationCp ?? 0
-  const evaluationWhite = Math.max(5, Math.min(95, winPercent(currentEvaluation)))
+  const visibleEvaluation = variationPly === null ? currentEvaluation : null
+  const evaluationWhite = visibleEvaluation === null ? 50 : Math.abs(visibleEvaluation) >= 9000 ? (visibleEvaluation > 0 ? 100 : 0) : Math.max(5, Math.min(95, winPercent(visibleEvaluation)))
   const graphPoints = analysisItems.map((item, index) => {
     const x = analysisItems.length <= 1 ? 10 : 10 + index * 300 / (analysisItems.length - 1)
     const y = 60 - Math.max(-50, Math.min(50, item.evaluationCp / 10))
     return { x, y, item }
   })
   const graphPath = graphPoints.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')
-  const whiteCaptured = capturedMaterial(displayedPosition, 'w')
-  const blackCaptured = capturedMaterial(displayedPosition, 'b')
-  const whiteAdvantage = Math.max(0, whiteCaptured.points - blackCaptured.points)
-  const blackAdvantage = Math.max(0, blackCaptured.points - whiteCaptured.points)
+  const materialMoves = analysisOpen && analysedMove ? analysisItems.slice(0, analysisIndex + (variationPly === null ? 1 : 0)) : gameHistory.current
+  const variationCaptures: { color: PlayerColor; captured?: Move['captured'] }[] = []
+  if (analysisOpen && analysedMove && variationPly !== null) {
+    const position = new Chess(analysedMove.fenBefore)
+    for (const uci of analysedMove.principalVariationUci.slice(0, variationPly)) {
+      const move = moveParts(uci)
+      const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+      variationCaptures.push({ color: played.color, captured: played.captured })
+    }
+  }
+  const whiteCaptured = capturedMaterial([...materialMoves, ...variationCaptures], 'w')
+  const blackCaptured = capturedMaterial([...materialMoves, ...variationCaptures], 'b')
+  const whiteAdvantage = Math.max(0, materialBalance(displayedPosition, 'w'))
+  const blackAdvantage = Math.max(0, materialBalance(displayedPosition, 'b'))
   const playerCaptured = playerSide === 'w' ? whiteCaptured : blackCaptured
   const opponentCaptured = playerSide === 'w' ? blackCaptured : whiteCaptured
   const playerMaterialAdvantage = playerSide === 'w' ? whiteAdvantage : blackAdvantage
@@ -444,6 +729,81 @@ function App() {
     engine.current = new StockfishEngine()
     return () => engine.current?.destroy()
   }, [])
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+    document.title = locale === 'uk' ? 'Дебют — шаховий тренер' : 'Debut — Chess Trainer'
+    document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]')
+      ?.setAttribute('content', locale === 'uk' ? 'Дебют' : 'Debut')
+  }, [locale])
+
+  useEffect(() => {
+    let mounted = true
+    let removeListener: (() => void) | undefined
+    void getPremiumStatus().then((active) => { if (mounted) setPremium(active) }).catch(() => {})
+    void getPremiumProducts().then((items) => { if (mounted) setProducts(items) }).catch(() => {})
+    void onPremiumStatusChange((active) => { if (mounted) setPremium(active) }).then((remove) => {
+      if (mounted) removeListener = remove
+      else remove()
+    }).catch(() => {})
+    return () => { mounted = false; removeListener?.() }
+  }, [])
+
+  useEffect(() => {
+    if (!premium) { setPremiumCourses([]); return }
+    let mounted = true
+    void getPremiumCourses(locale).then((items) => { if (mounted) setPremiumCourses(items) }).catch(() => {
+      if (mounted) setPremiumCourses([])
+    })
+    return () => { mounted = false }
+  }, [premium, locale])
+
+  useEffect(() => {
+    const list = reviewMovesRef.current
+    const active = list?.children[analysisIndex] as HTMLElement | undefined
+    if (list && active) list.scrollTo({ left: active.offsetLeft - list.clientWidth / 2 + active.clientWidth / 2 })
+  }, [analysisIndex, analysisSummaryOpen, analysisOpen])
+
+  async function changeLocale(next: Locale) {
+    if (next === locale) return
+    if (premium && premiumCourses.length) {
+      try { setPremiumCourses(await getPremiumCourses(next)) }
+      catch { setPurchaseMessage(t('lessonLoadFailed')); return }
+    }
+    setLocale(next)
+    setFeedback('')
+    setPurchaseMessage('')
+    localStorage.setItem('locale', next)
+  }
+
+  async function buyPremium(productId: string) {
+    setPurchaseBusy(true)
+    setPurchaseMessage('')
+    try {
+      const result = await purchasePremium(productId)
+      if (result === 'purchased') {
+        const active = await getPremiumStatus()
+        setPremium(active)
+        if (active) setPaywallOpen(false)
+        else setPurchaseMessage(t('purchasePendingVerification'))
+      } else if (result === 'pending') setPurchaseMessage(t('purchasePending'))
+    } catch {
+      setPurchaseMessage(t('purchaseFailed'))
+    } finally { setPurchaseBusy(false) }
+  }
+
+  async function restorePremium() {
+    setPurchaseBusy(true)
+    setPurchaseMessage('')
+    try {
+      const active = await restorePurchases()
+      setPremium(active)
+      if (active) setPaywallOpen(false)
+      else setPurchaseMessage(t('noSubscription'))
+    } catch {
+      setPurchaseMessage(t('restoreFailed'))
+    } finally { setPurchaseBusy(false) }
+  }
 
   function restartEngine() {
     engine.current?.destroy()
@@ -479,17 +839,20 @@ function App() {
   }
 
   async function analyseSafely(position: string, engineStrength: EngineStrength, moveTime: number) {
-    if (!engine.current) throw new Error('Stockfish не запущений')
+    if (!engine.current) throw new Error(t('stockfishNotStarted'))
+    const activeEngine = engine.current
     try {
-      return await engine.current.analyse(position, engineStrength, moveTime)
+      return await activeEngine.analyse(position, engineStrength, moveTime)
     } catch {
+      if (engine.current !== activeEngine) throw new Error('Stockfish search was stopped')
       restartEngine()
-      return await engine.current.analyse(position, engineStrength, moveTime)
+      return await engine.current!.analyse(position, engineStrength, moveTime)
     }
   }
 
   function resetGameState() {
     gameSession.current += 1
+    restartEngine()
     gameHistory.current = []
     setSelected(null)
     setLegalTargets([])
@@ -503,12 +866,40 @@ function App() {
     setAnalysisSummaryOpen(false)
     setAnalysisBusy(false)
     setAnalysisProgress(0)
+    setAnalysisError('')
     setAnalysisItems([])
     setAnalysisIndex(0)
+    setVariationPly(null)
     setThinking(false)
+    setEngineFailure(null)
   }
 
-  function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: string) {
+  function cancelAnalysis() {
+    gameSession.current += 1
+    restartEngine()
+    setAnalysisBusy(false)
+    setAnalysisOpen(false)
+    setAnalysisSummaryOpen(false)
+    setVariationPly(null)
+  }
+
+  function selectAnalysisMove(index: number) {
+    setAnalysisIndex(index)
+    setVariationPly(null)
+  }
+
+  function stepVariation(next: number) {
+    if (!analysedMove || next < 0 || next >= analysedMove.principalVariationFens.length) return
+    if (variationPly !== null && next === variationPly + 1) {
+      const move = moveParts(analysedMove.principalVariationUci[variationPly])
+      const position = new Chess(analysedMove.principalVariationFens[variationPly])
+      const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
+      playSound(position.isCheckmate() ? 'mate' : position.isCheck() ? 'check' : played.captured ? 'capture' : 'move')
+    }
+    setVariationPly(next)
+  }
+
+  function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: GameMoveRecord['openingNote']) {
     const uci = `${played.from}${played.to}${played.promotion ?? ''}`
     gameHistory.current.push({
       ply: gameHistory.current.length + 1,
@@ -518,20 +909,21 @@ function App() {
       uci,
       from: played.from,
       to: played.to,
+      captured: played.captured,
       fenBefore: beforeFen,
       fenAfter: game.current.fen(),
-      bookMove: openingBook.has(`${beforeFen}|${uci}`),
-      openingName: detectOpening([...gameHistory.current.map((move) => move.uci), uci]),
+      bookMove: openingBook.has(`${positionKey(beforeFen)}|${uci}`),
+      openingName: detectOpening([...gameHistory.current.map((move) => move.uci), uci], locale),
       openingNote,
     })
   }
 
-  function openingIdeaNote(beforeFen: string, afterFen: string, color: PlayerColor) {
+  function openingIdeaNote(beforeFen: string, afterFen: string, color: PlayerColor): GameMoveRecord['openingNote'] {
     if (color !== 'w') return undefined
     const before = new Chess(beforeFen)
     const after = new Chess(afterFen)
     if (before.isAttacked('f7', 'w') && !after.isAttacked('f7', 'w')) {
-      return 'Послаблено ідею дебюту: білі втратили тиск на поле f7. Перевір, чи це було виправдано.'
+      return { kind: 'f7' }
     }
     return undefined
   }
@@ -540,9 +932,9 @@ function App() {
     const styles: Record<string, CSSProperties> = {}
     if (selected) styles[selected] = { boxShadow: 'inset 0 0 0 4px #efbe4d' }
     for (const square of legalTargets) styles[square] = { background: 'radial-gradient(circle, rgba(20,30,27,.38) 0 16%, transparent 18%)' }
-    if (lastMove) {
-      styles[lastMove.from] = { backgroundColor: 'rgba(236,198,85,.35)' }
-      styles[lastMove.to] = { backgroundColor: 'rgba(236,198,85,.35)' }
+    if (displayedLastMove) {
+      styles[displayedLastMove.from] = { backgroundColor: 'rgba(236,198,85,.35)' }
+      styles[displayedLastMove.to] = { backgroundColor: 'rgba(236,198,85,.35)' }
     }
     if (practiceCorrection && hint) {
       styles[hint.from] = { boxShadow: 'inset 0 0 0 5px #efbe4d' }
@@ -550,10 +942,10 @@ function App() {
     }
     if (checkedKingSquare) styles[checkedKingSquare] = { ...styles[checkedKingSquare], boxShadow: 'inset 0 0 0 5px #e14d47', background: 'radial-gradient(circle, rgba(225,77,71,.72), rgba(139,25,28,.82))' }
     return styles
-  }, [selected, legalTargets, lastMove, practiceCorrection, hint, checkedKingSquare])
+  }, [selected, legalTargets, displayedLastMove, practiceCorrection, hint, checkedKingSquare])
 
-  function start() {
-    const source = trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios
+  function start(course = selectedCourse) {
+    const source = trainingColor === 'w' ? course.scenarios : course.blackScenarios
     const allChoices = source as Scenario[]
     const choices = variantFilter === 'all' ? allChoices : allChoices.filter((item) => scenarioVariant(item) === variantFilter)
     const selectedScenario = variantFilter === 'all' || surprises ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
@@ -562,7 +954,6 @@ function App() {
     setScenario(selectedScenario)
     setStep(0)
     setFen(game.current.fen())
-    setMistakes([])
     setFreePlay(false)
     setRatingStage('playing')
     if (trainingColor === 'b' && selectedScenario.initialMove) {
@@ -575,14 +966,31 @@ function App() {
     }
     setFeedback(mode === 'coach'
       ? trainingColor === 'w'
-        ? 'Знайди підсвічений хід. Натисни фігуру, потім поле.'
-        : `${selectedScenario.initialExplanation ?? 'Білі зробили перший хід.'} Тепер знайди відповідь чорних.`
+        ? t('coachStartWhite')
+        : t('coachStartBlack', { explanation: selectedScenario.initialExplanation ?? t('whiteFirstMove') })
       : '')
     setScreen('train')
   }
 
-  function beginFromMenu() {
-    if (localStorage.getItem(`theory-seen-${selectedCourse.id}-${trainingColor}`)) start()
+  async function beginFromMenu() {
+    if (selectedEntry.access === 'premium' && !premium) {
+      setPaywallOpen(true)
+      return
+    }
+    let course = availableCourses.find((item) => item.id === selectedEntry.id)
+    if (!course && selectedEntry.access === 'premium') {
+      try {
+        const premiumLessons = await getPremiumCourses(locale)
+        setPremiumCourses(premiumLessons)
+        course = premiumLessons.find((item) => item.id === selectedEntry.id)
+      } catch {
+        setPurchaseMessage(t('lessonLoadFailed'))
+        setPaywallOpen(true)
+        return
+      }
+    }
+    if (!course) return
+    if (localStorage.getItem(`theory-seen-${course.id}-${trainingColor}`)) start(course)
     else setScreen('theory')
   }
 
@@ -601,9 +1009,7 @@ function App() {
     setFreePlay(false)
     setPlayerColor(color)
     setRatingStage('playing')
-    setFeedback(color === 'w'
-      ? 'Перша партія: ти граєш білими. Дограй до завершення.'
-      : 'Друга партія: ти граєш чорними. Stockfish робить перший хід.')
+    setFeedback(t(color === 'w' ? 'ratingStartWhite' : 'ratingStartBlack'))
     setScreen('rating')
     const session = gameSession.current
     if (color === 'b') window.setTimeout(() => {
@@ -638,7 +1044,7 @@ function App() {
     }
 
     if (!legalTargets.includes(square)) {
-      setFeedback('Обери одне з підсвічених полів.')
+      setFeedback(t('chooseHighlighted'))
       return
     }
 
@@ -652,7 +1058,7 @@ function App() {
     if (!piece || piece.color !== userColor) return false
     const legalMove = game.current.moves({ square: from, verbose: true }).find((move) => move.to === to)
     if (!legalMove) {
-      setFeedback('Ця фігура не може піти на це поле. Обери підсвічене поле.')
+      setFeedback(t('illegalMove'))
       return false
     }
 
@@ -666,7 +1072,7 @@ function App() {
     setFen(game.current.fen())
 
     const uci = `${played.from}${played.to}${played.promotion ?? ''}`
-    const isBookMove = openingBook.has(`${beforeFen}|${uci}`)
+    const isBookMove = openingBook.has(`${positionKey(beforeFen)}|${uci}`)
     if (screen === 'rating') {
       recordMove(beforeFen, played, 'player')
       void evaluateRatingMove(beforeFen, game.current.fen())
@@ -676,7 +1082,7 @@ function App() {
       setMoveBadge(null)
       recordMove(beforeFen, played, 'player', openingIdeaNote(beforeFen, game.current.fen(), trainingColor))
       if (game.current.isGameOver()) {
-        setFeedback(gameResultText(game.current, null))
+        setFeedback(gameResultText(game.current, null, locale))
         return true
       }
       void requestEngineMove()
@@ -684,24 +1090,23 @@ function App() {
     }
 
     setMoveBadge(isBookMove
-      ? { square: played.to, symbol: '📖', label: 'Теорія', tone: 'theory' }
-      : { square: played.to, symbol: '↗', label: 'Поза варіантом', tone: 'departure' })
+      ? { square: played.to, symbol: '📖', label: t('theory'), tone: 'theory' }
+      : { square: played.to, symbol: '↗', label: t('departure'), tone: 'departure' })
 
     if (uci !== current.userMove) {
-      setMistakes((items) => [...items, `${played.san} замість ${current.userMove}`])
       if (mode === 'exam') {
-        recordMove(beforeFen, played, 'player', `Відхилення від вивченого плану: очікувався хід ${current.userMove}. ${current.explanation}`)
+        recordMove(beforeFen, played, 'player', { kind: 'deviation', stepIndex: step })
         setFreePlay(true)
-        setFeedback('↗ Це вихід із вивченого варіанта. Після партії Stockfish покаже, чи хід нормальний, чи він послабив дебютний план.')
+        setFeedback(t('outsideExam'))
         void requestEngineMove()
         return true
       }
 
       if (mode === 'practice') {
-        recordMove(beforeFen, played, 'player', `Відхилення від вивченого плану: очікувався хід ${current.userMove}. ${current.explanation}`)
+        recordMove(beforeFen, played, 'player', { kind: 'deviation', stepIndex: step })
         setPracticeCorrection(false)
         setPracticeDeviation(true)
-        setFeedback(`↗ ${played.san} — легальний хід, але він виходить із поточного дебютного варіанта.`)
+        setFeedback(t('outsidePractice', { move: played.san }))
         return true
       }
 
@@ -710,15 +1115,13 @@ function App() {
       setLastMove(null)
       setMoveBadge(null)
       setPracticeCorrection(false)
-      setFeedback(mode === 'coach'
-        ? `Спробуй інакше. Ідея зараз: ${current.explanation}`
-        : `Хід повернуто. Правильний напрямок підсвічено на дошці. ${current.explanation}`)
+      setFeedback(t(mode === 'coach' ? 'tryAgain' : 'moveReturned', { explanation: current.explanation }))
       return false
     }
 
     setPracticeCorrection(false)
     recordMove(beforeFen, played, 'player')
-    if (mode !== 'exam') setFeedback(`📖 Теорія · ${detectOpening(gameHistory.current.map((move) => move.uci))}. ${current.explanation}`)
+    if (mode !== 'exam') setFeedback(t('theoryFeedback', { opening: detectOpening(gameHistory.current.map((move) => move.uci), locale), explanation: current.explanation }))
     setThinking(true)
     const session = gameSession.current
     window.setTimeout(() => {
@@ -731,10 +1134,13 @@ function App() {
     if (!engine.current) return
     const session = gameSession.current
     setThinking(true)
-    setFeedback('Оцінюємо хід…')
+    setEngineFailure(null)
+    setFeedback(t('evaluatingMove'))
     try {
       const before = await analyseSafely(beforeFen, 3000, 360)
-      const after = await analyseSafely(afterFen, 3000, 360)
+      const after = game.current.isThreefoldRepetition()
+        ? { bestMove: null, scoreCp: 0, principalVariation: [] }
+        : await analyseSafely(afterFen, 3000, 360)
       if (session !== gameSession.current) return
       const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
       const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
@@ -752,7 +1158,8 @@ function App() {
     } catch (error) {
       if (session !== gameSession.current) return
       setThinking(false)
-      setFeedback(`Stockfish не зміг оцінити хід: ${error instanceof Error ? error.message : 'невідома помилка'}.`)
+      setEngineFailure('rating-evaluation')
+      setFeedback(t('ratingMoveError'))
     }
   }
 
@@ -771,7 +1178,7 @@ function App() {
       localStorage.setItem(samplesKey, JSON.stringify([sample]))
       setRatingStage('between')
       setThinking(false)
-      setFeedback('Партію білими завершено. Для оцінки обов’язково зіграй ще одну партію чорними.')
+      setFeedback(t('ratingWhiteDone'))
       return
     }
 
@@ -789,8 +1196,8 @@ function App() {
       seriousErrors,
       blunders,
     }
-    localStorage.setItem(samplesKey, JSON.stringify(samples))
     localStorage.setItem(ratingKey, JSON.stringify(result))
+    localStorage.removeItem(samplesKey)
     setRatingResult(result)
     setRatingStage('complete')
     setThinking(false)
@@ -809,11 +1216,10 @@ function App() {
     setThinking(false)
 
     const next = step + 1
-    if (next >= scenario.steps.length) {
+    if (next >= activeScenario.steps.length) {
       setStep(next)
       setFreePlay(true)
-      setFeedback(mode === 'exam' ? '' : `Дебют завершено. ${lesson.opponentExplanation} Тепер гра продовжується проти Stockfish.`)
-      saveResult()
+      setFeedback(mode === 'exam' ? '' : t('openingDone', { explanation: lesson.opponentExplanation }))
       return
     }
 
@@ -832,7 +1238,7 @@ function App() {
     setPracticeCorrection(true)
     setSelected(null)
     setLegalTargets([])
-    setFeedback(`Хід повернуто. Правильний маршрут підсвічено. ${current?.explanation ?? ''}`)
+    setFeedback(t('undoFeedback', { explanation: current?.explanation ?? '' }))
   }
 
   function continuePracticeDeviation() {
@@ -840,7 +1246,7 @@ function App() {
     setPracticeDeviation(false)
     setPracticeCorrection(false)
     setFreePlay(true)
-    setFeedback('Гра продовжується нестандартно проти Stockfish.')
+    setFeedback(t('continueFeedback'))
     void requestEngineMove()
   }
 
@@ -848,10 +1254,12 @@ function App() {
     if (!engine.current || game.current.isGameOver() || manualOutcome) return
     const session = gameSession.current
     setThinking(true)
-    if (ratingGame || mode !== 'exam') setFeedback('Stockfish думає…')
+    setEngineFailure(null)
+    if (ratingGame || mode !== 'exam') setFeedback(t('stockfishThinking'))
     try {
       const result = await analyseSafely(game.current.fen(), engineStrength, engineStrength >= 2000 ? 700 : 350)
       if (session !== gameSession.current || manualOutcome) return
+      if (!result.bestMove && !game.current.isGameOver()) throw new Error('Stockfish returned no legal move')
       if (result.bestMove) {
         const move = moveParts(result.bestMove)
         const beforeFen = game.current.fen()
@@ -863,14 +1271,22 @@ function App() {
         setFen(game.current.fen())
       }
       setThinking(false)
-      if (ratingGame) setFeedback(game.current.isGameOver() ? gameResultText(game.current, null) : '')
-      else if (game.current.isGameOver()) setFeedback(gameResultText(game.current, null))
-      else if (mode !== 'exam') setFeedback('Твій хід.')
+      if (ratingGame) setFeedback(game.current.isGameOver() ? gameResultText(game.current, null, locale) : '')
+      else if (game.current.isGameOver()) setFeedback(gameResultText(game.current, null, locale))
+      else if (mode !== 'exam') setFeedback(t('yourMove'))
     } catch (error) {
       if (session !== gameSession.current) return
       setThinking(false)
-      setFeedback(`Stockfish не зміг зробити хід: ${error instanceof Error ? error.message : 'невідома помилка'}.`)
+      setEngineFailure('engine-move')
+      setFeedback(t('engineMoveError'))
     }
+  }
+
+  function retryFailedEngine() {
+    if (engineFailure === 'rating-evaluation') {
+      const last = gameHistory.current.at(-1)
+      if (last?.actor === 'player') void evaluateRatingMove(last.fenBefore, last.fenAfter)
+    } else if (engineFailure === 'engine-move') void requestEngineMove(strength, screen === 'rating')
   }
 
   function rewindLesson() {
@@ -888,7 +1304,7 @@ function App() {
     setMoveBadge(null)
     setPracticeCorrection(false)
     setPracticeDeviation(false)
-    setFeedback(`Повтори ідею: ${scenario.steps[previousStep].explanation}`)
+    setFeedback(t('repeatIdea', { explanation: activeScenario.steps[previousStep].explanation }))
   }
 
   function resignGame() {
@@ -898,14 +1314,14 @@ function App() {
     setSelected(null)
     setLegalTargets([])
     setManualOutcome('resigned')
-    setFeedback('Ти здався. Партію завершено — тепер можна переглянути повний аналіз.')
+    setFeedback(t('resignedFeedback'))
   }
 
   async function offerDraw() {
     if (screen === 'rating' || !freePlay || gameFinished || thinking || game.current.turn() !== trainingColor) return
     const session = gameSession.current
     setThinking(true)
-    setFeedback('Stockfish оцінює пропозицію нічиєї…')
+    setFeedback(t('drawThinking'))
     try {
       const result = await analyseSafely(game.current.fen(), 3000, 300)
       if (session !== gameSession.current) return
@@ -914,18 +1330,19 @@ function App() {
         gameSession.current += 1
         restartEngine()
         setManualOutcome('draw-agreed')
-        setFeedback('Stockfish погодився на нічию. Можна перейти до аналізу партії.')
+        setFeedback(t('drawAccepted'))
       } else {
-        setFeedback('Stockfish відхилив нічию: у позиції ще є помітні шанси на перемогу. Твій хід.')
+        setFeedback(t('drawDeclined'))
       }
     } catch (error) {
       if (session !== gameSession.current) return
       setThinking(false)
-      setFeedback(`Не вдалося оцінити пропозицію: ${error instanceof Error ? error.message : 'невідома помилка'}.`)
+      setFeedback(t('drawError'))
     }
   }
 
   async function analyseGame() {
+    if (!premium) { setPaywallOpen(true); return }
     const records = [...gameHistory.current]
     if (!records.length || analysisBusy) return
     const session = gameSession.current
@@ -933,83 +1350,99 @@ function App() {
     setAnalysisSummaryOpen(false)
     setAnalysisBusy(true)
     setAnalysisProgress(0)
+    setAnalysisError('')
     setAnalysisIndex(0)
+    setVariationPly(null)
     setAnalysisItems([])
     setSelected(null)
     setLegalTargets([])
     const cache = new Map<string, Awaited<ReturnType<typeof analyseSafely>>>()
     const analysed: AnalysedMove[] = []
-    const completeLine = async (fen: string, initial: string[]) => {
-      const position = new Chess(fen)
-      const line: string[] = []
-      for (const uci of initial) {
-        if (line.length >= 6) break
-        const move = moveParts(uci)
-        const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
-        if (!played) break
-        line.push(uci)
-      }
-      while (line.length < 6 && !position.isGameOver()) {
-        let continuation = cache.get(position.fen())
-        if (!continuation) {
-          continuation = await analyseSafely(position.fen(), 3000, 180)
-          cache.set(position.fen(), continuation)
-        }
-        if (!continuation.bestMove) break
-        const move = moveParts(continuation.bestMove)
-        const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
-        if (!played) break
-        line.push(continuation.bestMove)
-      }
-      return line
-    }
+    const replay = new Chess()
     try {
       for (let index = 0; index < records.length; index += 1) {
         if (session !== gameSession.current) return
         const record = records[index]
+        if (replay.fen() !== record.fenBefore) throw new Error('Recorded positions do not match')
+        const recordedMove = moveParts(record.uci)
+        replay.move({ from: recordedMove.from, to: recordedMove.to, promotion: recordedMove.promotion || 'q' })
+        if (replay.fen() !== record.fenAfter) throw new Error('Recorded move is invalid')
         let before = cache.get(record.fenBefore)
         if (!before) {
-          before = await analyseSafely(record.fenBefore, 3000, 480)
+          before = await analyseSafely(record.fenBefore, 3000, 300)
           cache.set(record.fenBefore, before)
         }
-        let after = cache.get(record.fenAfter)
+        let after = replay.isThreefoldRepetition() ? { bestMove: null, scoreCp: 0, principalVariation: [] } : cache.get(record.fenAfter)
         if (!after) {
-          after = await analyseSafely(record.fenAfter, 3000, 480)
+          after = await analyseSafely(record.fenAfter, 3000, 300)
           cache.set(record.fenAfter, after)
         }
+        if (session !== gameSession.current) return
         const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
         const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
         const rawPrincipalVariation = before.principalVariation.length ? before.principalVariation : before.bestMove ? [before.bestMove] : []
-        const principalVariation = await completeLine(record.fenBefore, rawPrincipalVariation)
+        const positions = variationPositions(record.fenBefore, rawPrincipalVariation.slice(0, 6))
+        const legalVariation = rawPrincipalVariation.slice(0, positions.length - 1)
+        const bestMove = legalVariation[0] === before.bestMove ? before.bestMove : null
+        let brilliant = false
+        if (isGoodPieceSacrifice(record, cpLoss, before.scoreCp, after.scoreCp)) {
+          const deeperBefore = await analyseSafely(record.fenBefore, 3000, 1000)
+          const deeperAfter = await analyseSafely(record.fenAfter, 3000, 1000)
+          if (session !== gameSession.current) return
+          brilliant = Math.max(0, deeperBefore.scoreCp + deeperAfter.scoreCp) <= 35 && -deeperAfter.scoreCp >= -150
+        }
         analysed.push({
           ...record,
           cpLoss,
           winDrop,
           accuracy: lichessMoveAccuracy(winDrop),
-          bestMove: before.bestMove,
-          bestMoveSan: before.bestMove ? variationToSan(record.fenBefore, [before.bestMove], 1)[0] ?? before.bestMove : null,
-          principalVariationSan: variationToSan(record.fenBefore, principalVariation),
+          bestMove,
+          bestMoveSan: bestMove ? variationToSan(record.fenBefore, [bestMove], 1)[0] : null,
+          principalVariationSan: variationToSan(record.fenBefore, legalVariation),
+          principalVariationFens: positions,
+          principalVariationUci: legalVariation,
           evaluationCp: new Chess(record.fenAfter).turn() === 'w' ? after.scoreCp : -after.scoreCp,
-          label: moveLabel(winDrop, before.bestMove, record.uci, isGoodPieceSacrifice(record, cpLoss, before.scoreCp, after.scoreCp)),
+          label: moveLabel(winDrop, bestMove, record.uci, brilliant),
         })
         setAnalysisItems([...analysed])
         setAnalysisProgress(Math.round(((index + 1) / records.length) * 100))
       }
     } catch (error) {
-      setFeedback(`Аналіз зупинився: ${error instanceof Error ? error.message : 'невідома помилка'}.`)
+      if (session !== gameSession.current) return
+      setAnalysisError(t('analysisStopped'))
+      setAnalysisItems([])
     } finally {
       if (session === gameSession.current) {
         setAnalysisBusy(false)
-        if (analysed.length) setAnalysisSummaryOpen(true)
+        if (analysed.length === records.length) setAnalysisSummaryOpen(true)
       }
     }
   }
 
-  function saveResult() {
-    const resultKey = `${selectedCourse.id}-best`
-    const previous = Number(localStorage.getItem(resultKey) || 0)
-    const score = Math.round(((scenario.steps.length - mistakes.length) / scenario.steps.length) * 100)
-    if (score > previous) localStorage.setItem(resultKey, String(score))
+  const languagePicker = <div className="language-picker" role="group" aria-label="Language / Мова"><button className={locale === 'uk' ? 'active' : ''} onClick={() => void changeLocale('uk')} aria-pressed={locale === 'uk'}>Українська</button><button className={locale === 'en' ? 'active' : ''} onClick={() => void changeLocale('en')} aria-pressed={locale === 'en'}>English</button></div>
+
+  if (privacyOpen) {
+    return <main className="privacy-screen"><header className="paywall-header"><button className="icon-button" onClick={() => setPrivacyOpen(false)} aria-label={t('back')}>←</button><strong>{t('privacyPolicy')}</strong><span /></header><iframe title={t('privacyPolicy')} src={`${import.meta.env.BASE_URL}privacy.html#${locale}`} /></main>
+  }
+
+  if (paywallOpen) {
+    return (
+      <main className="paywall-screen">
+        <header className="paywall-header"><button className="icon-button" onClick={() => setPaywallOpen(false)} aria-label={t('close')}>×</button><strong>{t('debut')} Pro</strong><span /></header>
+        <div className="paywall-hero"><span>♛</span><h1>{t('reviewProTitle')}</h1><p>{t('reviewProDescription')}</p></div>
+        <div className="paywall-benefits"><div>♟ <span>{t('proBenefitCatalog')}</span></div><div>♜ <span>{t('proBenefitReview')}</span></div><div>♝ <span>{t('proBenefitLines')}</span></div></div>
+        {isNativeIOS() ? <>
+          <div className="paywall-products">
+            {products.map((product) => <button key={product.id} disabled={purchaseBusy} onClick={() => void buyPremium(product.id)}><span><strong>{product.displayName}</strong><small>{t(product.id.endsWith('yearly') ? 'yearly' : 'monthly')}</small></span><b>{product.displayPrice}</b></button>)}
+          </div>
+          {!products.length && <p className="paywall-status">{t('productsUnavailable')}</p>}
+          <button className="secondary paywall-restore" disabled={purchaseBusy} onClick={() => void restorePremium()}>{t('restore')}</button>
+        </> : <p className="paywall-status">{t('iosOnly')}</p>}
+        {purchaseMessage && <p className="paywall-status" role="status">{purchaseMessage}</p>}
+        <p className="paywall-legal">{t('appStoreLegal')} {t('subscriptionRenews')}</p>
+        <div className="paywall-links"><button onClick={() => setPrivacyOpen(true)}>{t('privacyPolicy')}</button><a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" rel="noopener noreferrer">{t('termsOfUse')}</a></div>
+      </main>
+    )
   }
 
   if (screen === 'home') {
@@ -1017,75 +1450,70 @@ function App() {
       <main className="shell home">
         <header className="game-hero">
           <div className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon-192-v4.png`} alt="" /></div>
-          <div><span className="eyebrow">Шаховий тренер</span><h1>Дебют</h1></div>
-          <div className="rating-badge"><small>Рівень</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
+          <div><span className="eyebrow">{t('brand')}</span><h1>{t('debut')}</h1></div>
+          <div className="rating-badge"><small>{t('level')}</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
         </header>
+
+        {languagePicker}
 
         <section className="play-menu">
           <button className="play-card rating-play" onClick={() => startRating('w')}>
             <span className="play-icon">♟</span>
-            <span><strong>{savedRating ? 'Повторити оцінювання' : 'Визначити мій рівень'}</strong><small>{savedRating ? 'Знову зіграти білими й чорними' : '2 повні партії: білими й чорними'}</small></span>
+            <span><strong>{t(savedRating ? 'ratingRepeat' : 'ratingDiscover')}</strong><small>{t(savedRating ? 'ratingRepeatDetail' : 'ratingDiscoverDetail')}</small></span>
             <b>→</b>
           </button>
           <div className="play-card lesson-play">
             <span className="play-icon">♜</span>
-            <span><strong>Тренування дебютів</strong><small>Підказки, практика та іспит</small></span>
+            <span><strong>{t('openingTraining')}</strong><small>{t('trainingDetail')}</small></span>
           </div>
         </section>
 
         <section>
           <div className="section-title">
-            <h2>Обери дебют</h2>
-            <span>{visibleCourses.length} доступно · {visiblePlannedCourses.length} скоро</span>
+            <h2>{t('chooseOpening')}</h2>
+            <span>{t('catalogCount', { free: catalog.filter((item) => item.access === 'free').length, total: catalog.length })}</span>
           </div>
           <div className="category-tabs">
             {categories.map((item) => <button className={category === item.id ? 'active' : ''} onClick={() => {
               setCategory(item.id)
-              const first = courses.find((course) => course.category === item.id)
+              const first = catalog.find((course) => course.category === item.id)
               if (first) setSelectedCourseId(first.id)
               setVariantFilter('all')
-            }} key={item.id}><strong>{item.name}</strong><small>{item.note}</small></button>)}
+            }} key={item.id}><strong>{t(item.name)}</strong><small>{catalog.filter((course) => course.category === item.id).length}</small></button>)}
           </div>
           <div className="color-filter">
-            {([['all', 'Усі'], ['white', 'За білих'], ['black', 'За чорних']] as [ColorFilter, string][]).map(([id, label]) => <button className={colorFilter === id ? 'active' : ''} onClick={() => {
+            {([['all', 'all'], ['white', 'playWhiteFilter'], ['black', 'playBlackFilter']] as [ColorFilter, UiKey][]).map(([id, label]) => <button className={colorFilter === id ? 'active' : ''} onClick={() => {
               setColorFilter(id)
               if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
-            }} key={id}>{label}</button>)}
+            }} key={id}>{t(label)}</button>)}
           </div>
           <div className="opening-list">
             {visibleCourses.map((course, index) => (
-              <button className={`opening-card ${selectedCourse.id === course.id ? 'active' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
-                <span className="opening-number">0{index + 1}</span>
-                <span className="opening-copy"><strong>{course.name}</strong><small>Навчання за білих і чорних</small></span>
-                <span className="opening-tag">Доступно</span>
-              </button>
-            ))}
-            {visiblePlannedCourses.map((name, index) => (
-              <button className="opening-card planned" disabled key={name}>
-                <span className="opening-number">{String(visibleCourses.length + index + 1).padStart(2, '0')}</span>
-                <span className="opening-copy"><strong>{name}</strong><small>Готуємо теорію та практичні варіанти</small></span>
-                <span className="opening-tag planned-tag">Скоро</span>
+              <button className={`opening-card ${selectedEntry.id === course.id ? 'active' : ''} ${course.access === 'premium' && !premium ? 'locked' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
+                <span className="opening-number">{String(index + 1).padStart(2, '0')}</span>
+                <span className="opening-copy"><strong>{course.name}</strong><small>{course.eco} · {t('bothColors')}</small></span>
+                <span className={`opening-tag ${course.access === 'premium' && !premium ? 'premium-tag' : ''}`}>{course.access === 'premium' && !premium ? '♛ Pro' : t('available')}</span>
               </button>
             ))}
           </div>
-          <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label="Сторона в дебюті">
-            {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>Грати білими</strong><small>Будувати план дебюту</small></button>}
-            {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>Грати чорними</strong><small>Вивчити правильну відповідь</small></button>}
+          <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label={t('sideLabel')}>
+            {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>{t('playWhite')}</strong><small>{t('whitePlan')}</small></button>}
+            {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>{t('playBlack')}</strong><small>{t('blackPlan')}</small></button>}
           </div>
-          <div className="variant-filter">
-            <div><strong>Варіант · {selectedCourse.name}</strong><small>{selectedCourse.variants.length - 1} доступно</small></div>
-            <div className="variant-options">
-              {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.id === 'all' ? `🎲 Випадковий із ${selectedCourse.variants.length - 1}` : item.name}</button>)}
-            </div>
-          </div>
+          {selectedEntry.access === 'premium' && !selectedLesson ? <div className="locked-preview"><strong>♛ {selectedEntry.name}</strong><span>{selectedEntry.eco} · {premium ? t('lessonLoading') : t('premiumLesson')}</span><a href={selectedEntry.source} target="_blank" rel="noopener noreferrer">{t('openingSource')} ↗</a>{!premium && <button onClick={() => setPaywallOpen(true)}>{t('viewSubscription')} →</button>}</div> : <div className="variant-filter">
+              <div><strong>{t('variation', { name: selectedEntry.name })}</strong><small>{t('variantsAvailable', { count: selectedCourse.variants.length - 1 })}</small></div>
+              <div className="variant-options">
+                {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.id === 'all' ? t('randomVariation', { count: selectedCourse.variants.length - 1 }) : item.name}</button>)}
+              </div>
+            </div>}
         </section>
 
         <section>
-          <div className="section-title"><h2>Режим</h2></div>
+          <div className="section-title"><h2>{t('mode')}</h2></div>
           <div className="mode-grid">
             {modes.map((item, index) => (
               <button className={`mode-card ${mode === item.id ? 'selected' : ''}`} onClick={() => setMode(item.id)} key={item.id}>
-                <span>{index + 1}</span><strong>{item.name}</strong><small>{item.description}</small>
+                <span>{index + 1}</span><strong>{t(item.name)}</strong><small>{t(item.description)}</small>
               </button>
             ))}
           </div>
@@ -1093,25 +1521,25 @@ function App() {
 
         <section className="settings-card">
           <label className="switch-row">
-            <span><strong>Несподівані варіанти</strong><small>Stockfish перевірятиме різними продовженнями</small></span>
+            <span><strong>{t('surprises')}</strong><small>{t('surprisesDetail')}</small></span>
             <input type="checkbox" checked={surprises} onChange={(event) => setSurprises(event.target.checked)} />
           </label>
           <div className="strength-row">
-            <span><strong>Сила суперника</strong><small>{strength === 3000 ? 'Максимальна' : `≈ ${strength} Elo`} · рейтинг і тренування</small></span>
+            <span><strong>{t('opponentStrength')}</strong><small>{t('strengthDetail', { value: strength === 3000 ? t('maximum') : `≈ ${strength} Elo` })}</small></span>
             <div className="strength-picker">
               <button className="strength-trigger" aria-expanded={strengthMenuOpen} onClick={() => setStrengthMenuOpen((open) => !open)}>
-                {strengthOptions.find((item) => item.value === strength)?.label}
+                {t(strengthOptions.find((item) => item.value === strength)?.label ?? 'amateur')}
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
               </button>
-              {strengthMenuOpen && <div className="strength-menu" role="listbox" aria-label="Сила суперника">
-                {strengthOptions.map((item) => <button role="option" aria-selected={strength === item.value} className={strength === item.value ? 'active' : ''} onClick={() => { setStrength(item.value); setStrengthMenuOpen(false) }} key={item.value}>{item.label}<small>{item.value === 3000 ? 'MAX' : `${item.value} Elo`}</small></button>)}
+              {strengthMenuOpen && <div className="strength-menu" role="listbox" aria-label={t('opponentStrength')}>
+                {strengthOptions.map((item) => <button role="option" aria-selected={strength === item.value} className={strength === item.value ? 'active' : ''} onClick={() => { setStrength(item.value); setStrengthMenuOpen(false) }} key={item.value}>{t(item.label)}<small>{item.value === 3000 ? 'MAX' : `${item.value} Elo`}</small></button>)}
               </div>}
             </div>
           </div>
         </section>
 
-        <button className="primary" onClick={beginFromMenu}>Почати тренування <span>→</span></button>
-        <p className="install-note">На iPhone: Safari → Поділитися → На початковий екран</p>
+        <button className="primary" onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !premium ? 'unlockPro' : 'startTraining')} <span>→</span></button>
+        {!isNativeIOS() && <p className="install-note">{t('installIphone')}</p>}
       </main>
     )
   }
@@ -1124,31 +1552,31 @@ function App() {
     return (
       <main className="shell theory-screen">
         <header className="theory-header">
-          <button className="icon-button" onClick={() => setScreen('home')} aria-label="Назад">←</button>
-          <div><span className="eyebrow">Перед грою · {trainingColor === 'w' ? 'білі' : 'чорні'}</span><h1>{selectedCourse.name}</h1></div>
-          <button className="skip-button" onClick={finishTheory}>Пропустити</button>
+          <button className="icon-button" onClick={() => setScreen('home')} aria-label={t('back')}>←</button>
+          <div><span className="eyebrow">{t('beforeGame', { color: colorName(trainingColor) })}</span><h1>{selectedCourse.name}</h1></div>
+          <button className="skip-button" onClick={finishTheory}>{t('skip')}</button>
         </header>
         <section className="theory-intro">
           <span className="move-sequence">{previewLine}</span>
-          <h2>Про що цей дебют</h2>
-          <p>{trainingColor === 'w' ? theory.summary : `${theory.summary} Твій головний план за чорних: ${theory.blackGoals.join(' ')}`}</p>
+          <h2>{t('aboutOpening')}</h2>
+          <p>{trainingColor === 'w' ? theory.summary : `${theory.summary} ${t('blackMainPlan', { goals: theory.blackGoals.join(' ') })}`}</p>
         </section>
-        <section className="theory-block history-block"><span>Історія</span><p>{theory.history}</p></section>
+        <section className="theory-block history-block"><span>{t('history')}</span><p>{theory.history}</p></section>
         <section className="theory-columns">
           {(trainingColor === 'w' ? [
-            <div className="theory-block" key="white"><span>Твоя мета · білі</span><ul>{theory.whiteGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
-            <div className="theory-block dark-goals" key="black"><span>План суперника · чорні</span><ul>{theory.blackGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
+            <div className="theory-block" key="white"><span>{t('yourGoal', { color: t('white') })}</span><ul>{theory.whiteGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
+            <div className="theory-block dark-goals" key="black"><span>{t('opponentPlan', { color: t('black') })}</span><ul>{theory.blackGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
           ] : [
-            <div className="theory-block" key="black"><span>Твоя мета · чорні</span><ul>{theory.blackGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
-            <div className="theory-block dark-goals" key="white"><span>План суперника · білі</span><ul>{theory.whiteGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
+            <div className="theory-block" key="black"><span>{t('yourGoal', { color: t('black') })}</span><ul>{theory.blackGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
+            <div className="theory-block dark-goals" key="white"><span>{t('opponentPlan', { color: t('white') })}</span><ul>{theory.whiteGoals.map((goal) => <li key={goal}>{goal}</li>)}</ul></div>,
           ])}
         </section>
         <section>
-          <div className="section-title"><h2>Ключові поля</h2></div>
+          <div className="section-title"><h2>{t('keySquares')}</h2></div>
           <div className="square-guide">{theory.keySquares.map((item) => <div key={item.square}><strong>{item.square}</strong><p>{item.idea}</p></div>)}</div>
         </section>
-        <section className="warning-card"><strong>Не поспішай</strong><p>{trainingColor === 'w' ? theory.warning : `Стеж за планом білих: ${theory.whiteGoals[0]} Твоя відповідь: ${theory.blackGoals[0]}`}</p></section>
-        <button className="primary" onClick={finishTheory}>Почати тренування <span>→</span></button>
+        <section className="warning-card"><strong>{t('caution')}</strong><p>{trainingColor === 'w' ? theory.warning : t('watchWhitePlan', { white: theory.whiteGoals[0], black: theory.blackGoals[0] })}</p></section>
+        <button className="primary" onClick={finishTheory}>{t('startTraining')} <span>→</span></button>
       </main>
     )
   }
@@ -1157,21 +1585,21 @@ function App() {
     return (
       <main className="analysis-report" role="dialog" aria-modal="true" aria-labelledby="analysis-report-title">
         <header className="report-header">
-          <button className="icon-button" onClick={() => { setAnalysisSummaryOpen(false); setAnalysisOpen(false) }} aria-label="Закрити">×</button>
-          <strong>Звіт про партію</strong>
+          <button className="icon-button" onClick={cancelAnalysis} aria-label={t('close')}>×</button>
+          <strong>{t('gameReport')}</strong>
           <span />
         </header>
         <section className={`report-result ${playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'}`}>
           <span className="result-crown">{playerScore === 1 ? '♔' : playerScore === .5 ? '½' : '♚'}</span>
-          <div><small>Аналіз завершено</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome)}</p></div>
+          <div><small>{t('analysisFinished')}</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome, locale)}</p></div>
         </section>
         <section className="report-rating">
-          <div><small>Рівень цієї партії</small><strong>≈ {performanceRating}</strong></div>
-          <div><small>Твоя точність</small><strong>{analysisAccuracy}%</strong></div>
+          <div><small>{t('approximatePerformance')}</small><strong>≈ {performanceRating}</strong></div>
+          <div><small>{t('yourAccuracy')}</small><strong>{analysisAccuracy}%</strong></div>
         </section>
-        <section className="evaluation-chart" aria-label="Графік переваги протягом партії">
-          <div className="chart-title"><strong>Перебіг партії</strong><span>перевага білих / чорних</span></div>
-          <svg viewBox="0 0 320 120" role="img" aria-label="Діаграма оцінки позицій">
+        <section className="evaluation-chart" aria-label={t('evaluationChart')}>
+          <div className="chart-title"><strong>{t('gameFlow')}</strong><span>{t('whiteBlackAdvantage')}</span></div>
+          <svg viewBox="0 0 320 120" role="img" aria-label={t('evaluationChart')}>
             <rect x="0" y="0" width="320" height="60" rx="10" fill="rgba(238,242,232,.055)" />
             <rect x="0" y="60" width="320" height="60" rx="10" fill="rgba(0,0,0,.18)" />
             <line x1="0" y1="60" x2="320" y2="60" stroke="rgba(238,242,232,.35)" strokeWidth="1" />
@@ -1180,17 +1608,17 @@ function App() {
           </svg>
         </section>
         <section className="players-summary">
-          <div><span className="player-piece">{playerSide === 'w' ? '♔' : '♚'}</span><small>Ти · {playerSide === 'w' ? 'білі' : 'чорні'}</small><strong>{analysisAccuracy}%</strong></div>
-          <div><span className="player-piece">{playerSide === 'w' ? '♚' : '♔'}</span><small>Stockfish · {strength === 3000 ? 'MAX' : strength}</small><strong>{opponentAccuracy}%</strong></div>
+          <div><span className="player-piece">{playerSide === 'w' ? '♔' : '♚'}</span><small>{t('youColor', { color: colorName(playerSide) })}</small><strong>{analysisAccuracy}%</strong></div>
+          <div><span className="player-piece">{playerSide === 'w' ? '♚' : '♔'}</span><small>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })}</small><strong>{opponentAccuracy}%</strong></div>
         </section>
         <section className="quality-report">
-          <h2>Твої ходи</h2>
+          <h2>{t('yourMoves')}</h2>
           <div className="quality-summary">
-            <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>Теорія</small></div>
-            {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove).symbol}</span><strong>{analysisCounts[label]}</strong><small>{label}</small></div>)}
+            <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>{t('theory')}</small></div>
+            {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove, locale).symbol}</span><strong>{analysisCounts[label]}</strong><small>{t(label)}</small></div>)}
           </div>
         </section>
-        <button className="primary report-review-button" onClick={() => setAnalysisSummaryOpen(false)}>Дивитися аналіз <span>→</span></button>
+        <button className="primary report-review-button" onClick={() => setAnalysisSummaryOpen(false)}>{t('viewReview')} <span>→</span></button>
       </main>
     )
   }
@@ -1199,16 +1627,16 @@ function App() {
     return (
       <main className="analysis-screen">
         <header className="review-header">
-          <button className="icon-button" onClick={() => setAnalysisOpen(false)} aria-label="Закрити аналіз">×</button>
-          <div><strong>Аналіз партії</strong><small>Локальний Stockfish · MAX</small></div>
-          <span className="evaluation-number">{analysedMove ? evaluationLabel(currentEvaluation) : '…'}</span>
+          <button className="icon-button" onClick={cancelAnalysis} aria-label={t('closeReview')}>×</button>
+          <div><strong>{t('gameReview')}</strong><small>{t('localEngine')}</small></div>
+          <span className="evaluation-number">{analysedMove ? visibleEvaluation === null ? '—' : evaluationLabel(visibleEvaluation) : '…'}</span>
         </header>
 
         {analysisBusy && (
           <section className="analysis-loading">
             <span className="analysis-spinner" />
-            <h1>Аналізуємо партію</h1>
-            <p>Stockfish перевіряє позиції та будує першу лінію.</p>
+            <h1>{t('reviewWorking')}</h1>
+            <p>{t('reviewWorkingDetail')}</p>
             <div className="analysis-progress"><span style={{ width: `${analysisProgress}%` }} /></div>
             <strong>{analysisProgress}%</strong>
           </section>
@@ -1216,27 +1644,34 @@ function App() {
 
         {!analysisBusy && analysedMove && (
           <>
-            <section className="review-commentary">
+            <section className="review-commentary" aria-live="polite">
               <div className="review-title">
-                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? '📖 Теорія' : `${badgeForAnalysis(analysedMove).symbol} ${analysedMove.label}`}</span>
+                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? `📖 ${t('theory')}` : `${badgeForAnalysis(analysedMove, locale).symbol} ${t(analysedMove.label)}`}</span>
                 <strong>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</strong>
               </div>
-              <p><b>{analysedMove.openingName}.</b> {analysedMove.bookMove
-                ? 'Книжковий хід у цьому варіанті.'
+              <p><b>{analysisOpeningName}.</b> {analysedMove.bookMove
+                ? t('bookMove')
                 : analysedMove.cpLoss <= 10
-                ? 'Хід зберігає найкращу оцінку позиції.'
-                : `Втрачено приблизно ${(analysedMove.cpLoss / 100).toFixed(1)} пішака оцінки.`}</p>
+                ? t('keepsEvaluation')
+                : t('lostPawns', { amount: (analysedMove.cpLoss / 100).toFixed(1) })}</p>
               {analysedMove.bestMoveSan && (
                 <div className="review-best-line">
-                  <span>Найкращий хід <strong>{analysedMove.bestMoveSan}</strong></span>
-                  <p><b>Перша лінія:</b> {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</p>
+                  <span>{t('bestMove')} <strong>{analysedMove.bestMoveSan}</strong></span>
+                  <p><b>{t('bestLine')}</b> {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</p>
                 </div>
               )}
-              {analysedMove.openingNote && <p className="opening-note">♟ {analysedMove.openingNote}</p>}
+              {analysedMove.principalVariationUci.length > 0 && (variationPly === null
+                ? <button className="line-toggle" onClick={() => stepVariation(0)}>{t('replayLine')} →</button>
+                : <div className="line-controls"><button onClick={() => stepVariation(variationPly - 1)} disabled={variationPly === 0} aria-label={t('previousLine')}>‹</button><span>{variationPly === 0 ? t('lineStart') : `${t('lineStep', { current: variationPly, total: analysedMove.principalVariationUci.length })} · ${analysedMove.principalVariationSan[variationPly - 1]}`}</span><button onClick={() => stepVariation(variationPly + 1)} disabled={variationPly >= analysedMove.principalVariationUci.length} aria-label={t('nextLine')}>›</button><button className="line-exit" onClick={() => setVariationPly(null)}>{t('exitLine')}</button></div>)}
+              {analysisOpeningNote && <p className="opening-note">♟ {analysisOpeningNote}</p>}
             </section>
 
+            <div className="material-row analysis-material opponent-material">
+              <span>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })} · {colorName(playerSide === 'w' ? 'b' : 'w')}</span>
+              <b>{opponentCaptured.pieces.join(' ') || '—'} {opponentMaterialAdvantage > 0 ? `+${opponentMaterialAdvantage}` : ''}</b>
+            </div>
             <section className="review-board-row">
-              <div className={`evaluation-bar ${playerSide === 'b' ? 'black-orientation' : ''}`} aria-label={`Оцінка позиції ${evaluationLabel(currentEvaluation)}`}>
+              <div className={`evaluation-bar ${playerSide === 'b' ? 'black-orientation' : ''}`} aria-label={visibleEvaluation === null ? t('evaluationUnavailable') : t('positionEvaluation', { value: evaluationLabel(visibleEvaluation) })}>
                 {playerSide === 'w' ? <>
                   <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
                   <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
@@ -1244,9 +1679,9 @@ function App() {
                   <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
                   <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
                 </>}
-                <b>{evaluationLabel(currentEvaluation)}</b>
+                <b>{visibleEvaluation === null ? '—' : evaluationLabel(visibleEvaluation)}</b>
               </div>
-              <div className="board-wrap review-board" aria-label="Шахова дошка аналізу">
+              <div className="board-wrap review-board" aria-label={t('analysisBoard')}>
                 <Chessboard options={{
                   id: 'analysis-board',
                   position: displayedFen,
@@ -1260,91 +1695,87 @@ function App() {
                   canDragPiece: () => false,
                 }} />
                 {displayedBadge && <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} aria-label={displayedBadge.label}>{displayedBadge.symbol}</div>}
-                {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label="Король програв">×</div>}
-                {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label="Король переміг">♛</div>}
+                {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label={t('kingLost')}>×</div>}
+                {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label={t('kingWon')}>♛</div>}
               </div>
             </section>
 
             <div className="material-row analysis-material">
-              <span>{playerSide === 'w' ? 'Ти · білі' : 'Ти · чорні'}</span>
+              <span>{t('youColor', { color: colorName(playerSide) })}</span>
               <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
             </div>
 
-            <nav className="review-controls" aria-label="Перехід між ходами">
-              <button onClick={() => setAnalysisIndex((index) => Math.max(0, index - 1))} disabled={analysisIndex === 0} aria-label="Попередній хід">‹</button>
-              <div className="review-moves">
-                {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => setAnalysisIndex(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
+            <nav className="review-controls" aria-label={t('moveNavigation')}>
+              <button onClick={() => selectAnalysisMove(Math.max(0, analysisIndex - 1))} disabled={analysisIndex === 0} aria-label={t('previousMove')}>‹</button>
+              <div className="review-moves" ref={reviewMovesRef}>
+                {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => selectAnalysisMove(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
               </div>
-              <button onClick={() => setAnalysisIndex((index) => Math.min(analysisItems.length - 1, index + 1))} disabled={analysisIndex >= analysisItems.length - 1} aria-label="Наступний хід">›</button>
+              <button onClick={() => selectAnalysisMove(Math.min(analysisItems.length - 1, analysisIndex + 1))} disabled={analysisIndex >= analysisItems.length - 1} aria-label={t('nextMove')}>›</button>
             </nav>
           </>
         )}
 
-        {!analysisBusy && !analysedMove && <p className="analysis-empty">Не вдалося отримати аналіз цієї партії.</p>}
+        {!analysisBusy && !analysedMove && <div className="analysis-failure" role="alert"><p>{analysisError || t('reviewUnavailable')}</p><button className="primary" onClick={() => void analyseGame()}>{t('tryReviewAgain')} →</button></div>}
       </main>
     )
   }
 
   return (
-    <main className="shell training">
+      <main className="shell training">
       <header className="training-header">
-        <button className="icon-button" onClick={() => setScreen('home')} aria-label="Назад">←</button>
-        <div><strong>{screen === 'rating' ? 'Оціночна партія' : selectedCourse.name}</strong><small>{screen === 'rating' ? `Проти Stockfish · ${strength === 3000 ? 'MAX' : strength}` : scenario.name}</small></div>
-        <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : start} aria-label="Почати знову">↻</button>
-      </header>
+        <button className="icon-button" onClick={() => setScreen('home')} aria-label={t('back')}>←</button>
+        <div><strong>{screen === 'rating' ? t('ratingGame') : selectedCourse.name}</strong><small>{screen === 'rating' ? t('againstStockfish', { level: strength === 3000 ? 'MAX' : strength }) : activeScenario.name}</small></div>
+        <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : () => start()} aria-label={t('restart')}>↻</button>
+        </header>
 
       {screen !== 'rating' && <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>}
 
       <section className={`coach-card ${screen !== 'rating' && mode === 'practice' ? 'practice-mode' : ''}`}>
-        <span className="mode-pill">{screen === 'rating' ? `Суперник ${strength === 3000 ? 'MAX' : strength} · аналіз MAX · ${playerColor === 'w' ? 'білі' : 'чорні'}` : `${modes.find((item) => item.id === mode)?.name} · ${trainingColor === 'w' ? 'білі' : 'чорні'}`}</span>
-        <h2>{analysisOpen ? (analysisBusy ? 'Аналізуємо партію' : analysedMove?.label ?? 'Аналіз готовий') : screen === 'rating' ? (ratingResult ? 'Рівень визначено' : ratingStage === 'between' ? 'Половина оцінювання готова' : 'Грай без підказок') : gameFinished ? gameResultText(game.current, manualOutcome) : freePlay ? 'Мітельшпіль' : current?.title ?? 'Дебют завершено'}</h2>
+        <span className="mode-pill">{screen === 'rating' ? t('ratingLevel', { level: strength === 3000 ? 'MAX' : strength, color: colorName(playerColor) }) : t('coachLevel', { mode: t(modes.find((item) => item.id === mode)?.name ?? 'coach'), color: colorName(trainingColor) })}</span>
+        <h2>{screen === 'rating' ? (ratingResult ? t('ratingReady') : ratingStage === 'between' ? t('ratingHalfway') : t('playWithoutHints')) : gameFinished ? gameResultText(game.current, manualOutcome, locale) : freePlay ? t('middlegame') : current?.title ?? t('openingComplete')}</h2>
         <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
         <p className="coach-copy">
-          {analysisOpen
-            ? analysisBusy
-              ? `Stockfish перевіряє кожну позицію: ${analysisProgress}%.`
-              : 'Обирай ходи нижче або переходь кнопками назад і вперед.'
-            : screen === 'rating' && ratingStage === 'playing'
-            ? 'Дограй партію до завершення. Оцінка з’явиться після двох повних партій: білими та чорними. Аналіз виконується на твоєму телефоні.'
+          {screen === 'rating' && ratingStage === 'playing'
+            ? t('ratingInstructions')
             : screen !== 'rating' && mode === 'coach' && current && !freePlay
               ? current.explanation
               : screen !== 'rating' && mode === 'exam' && !freePlay
-                ? 'Зіграй дебют самостійно. Результат побачиш після завершення.'
+                ? t('examInstructions')
                 : '\u00a0'}
         </p>
       </section>
 
       {screen === 'train' && mode === 'practice' && practiceDeviation && current && (
         <section className="practice-correction" aria-live="assertive">
-          <strong>Відхилення від дебюту</strong>
-          <p>Хід залишився на дошці. За вивченим варіантом очікувався хід <b>{current.userMove.slice(0, 2)}</b> → <b>{current.userMove.slice(2, 4)}</b>.</p>
+          <strong>{t('deviationTitle')}</strong>
+          <p>{t('deviationDetail', { from: current.userMove.slice(0, 2), to: current.userMove.slice(2, 4) })}</p>
           <small>{current.explanation}</small>
           <div className="deviation-actions">
-            <button className="secondary" onClick={undoPracticeDeviation}>← Повернути хід</button>
-            <button className="primary" onClick={continuePracticeDeviation}>Продовжити нестандартно</button>
+            <button className="secondary" onClick={undoPracticeDeviation}>← {t('undoMove')}</button>
+            <button className="primary" onClick={continuePracticeDeviation}>{t('continueOutside')}</button>
           </div>
         </section>
       )}
 
       {screen === 'train' && mode === 'practice' && practiceCorrection && current && hint && (
         <section className="practice-correction" aria-live="assertive">
-          <strong>Спробуй теоретичний хід</strong>
-          <p>Зроби хід із <b>{hint.from}</b> на підсвічене поле <b>{hint.to}</b>.</p>
+          <strong>{t('tryTheoryMove')}</strong>
+          <p>{t('moveFromTo', { from: hint.from, to: hint.to })}</p>
           <small>{current.explanation}</small>
         </section>
       )}
 
-      <div className="material-row opponent-material" aria-label="Матеріал суперника">
-        <span>Stockfish · {playerSide === 'w' ? 'чорні' : 'білі'}</span>
+      <div className="material-row opponent-material" aria-label={t('opponentMaterial')}>
+        <span>Stockfish · {colorName(playerSide === 'w' ? 'b' : 'w')}</span>
         <b>{opponentCaptured.pieces.join(' ') || '—'} {opponentMaterialAdvantage > 0 ? `+${opponentMaterialAdvantage}` : ''}</b>
       </div>
 
-      <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label="Шахова дошка">
+      <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label={t('board')}>
         <Chessboard options={{
           id: 'training-board',
           position: displayedFen,
           boardOrientation: playerSide === 'b' ? 'black' : 'white',
-          boardStyle: { borderRadius: '12px', boxShadow: '0 16px 38px rgba(0,0,0,.28)', overflow: 'hidden', touchAction: selected ? 'none' : 'pan-y' },
+          boardStyle: { borderRadius: '12px', boxShadow: '0 16px 38px rgba(0,0,0,.28)', overflow: 'hidden', touchAction: 'pan-y' },
           lightSquareStyle: { backgroundColor: '#d8cfb6' },
           darkSquareStyle: { backgroundColor: '#6f8b7e' },
           squareStyles,
@@ -1352,7 +1783,7 @@ function App() {
           animationDurationInMs: 120,
           allowDrawingArrows: false,
           canDragPiece: ({ piece }) => {
-            return !analysisOpen && !thinking && !gameFinished && (screen !== 'rating' || ratingStage === 'playing') && game.current.turn() === playerSide && piece.pieceType.startsWith(playerSide)
+            return !window.matchMedia('(pointer: coarse)').matches && !analysisOpen && !thinking && !gameFinished && (screen !== 'rating' || ratingStage === 'playing') && game.current.turn() === playerSide && piece.pieceType.startsWith(playerSide)
           },
           onPieceDrop: ({ sourceSquare, targetSquare }) => {
             lastDropAt.current = Date.now()
@@ -1367,46 +1798,48 @@ function App() {
               : displayedBadge.symbol}
           </div>
         )}
-        {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label="Король програв">×</div>}
-        {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label="Король переміг">♛</div>}
+        {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label={t('kingLost')}>×</div>}
+        {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label={t('kingWon')}>♛</div>}
       </section>
 
-      <div className="material-row player-material" aria-label="Твій матеріал">
-        <span>Ти · {playerSide === 'w' ? 'білі' : 'чорні'}</span>
+      <div className="material-row player-material" aria-label={t('yourMaterial')}>
+        <span>{t('youColor', { color: colorName(playerSide) })}</span>
         <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
       </div>
 
       <section className="game-controls">
-        <div><span className={thinking || analysisBusy ? 'status-dot thinking' : 'status-dot'} />{analysisOpen ? analysisBusy ? 'Аналізуємо' : analysedMove?.label ?? 'Аналіз готовий' : gameFinished ? 'Партію завершено' : thinking ? 'Stockfish думає' : game.current.turn() === playerSide ? 'Твій хід' : 'Хід Stockfish'}</div>
-        {!analysisOpen && <span>{screen === 'rating' ? 'Без підказок' : freePlay ? `${strength === 3000 ? 'MAX' : strength} Elo` : `${step}/${scenario.steps.length}`}</span>}
+        <div><span className={thinking ? 'status-dot thinking' : 'status-dot'} />{gameFinished ? t('gameFinished') : thinking ? t('stockfishThinkingShort') : game.current.turn() === playerSide ? t('yourTurn') : t('stockfishTurn')}</div>
+        <span>{screen === 'rating' ? t('noHints') : freePlay ? `${strength === 3000 ? 'MAX' : strength} Elo` : `${step}/${activeScenario.steps.length}`}</span>
       </section>
 
+      {engineFailure && !thinking && <button className="secondary engine-retry" onClick={retryFailedEngine}>{t(engineFailure === 'rating-evaluation' ? 'retryEvaluation' : 'retryEngine')} →</button>}
+
       {screen === 'train' && !freePlay && mode !== 'exam' && step > 0 && !thinking && (
-        <button className="secondary lesson-back" onClick={rewindLesson}>← Повернути попередній хід і пояснення</button>
+        <button className="secondary lesson-back" onClick={rewindLesson}>← {t('rewindLesson')}</button>
       )}
 
       {screen !== 'rating' && freePlay && !gameFinished && !analysisOpen && (
         <div className="end-controls">
-          <button onClick={() => void offerDraw()} disabled={thinking || game.current.turn() !== trainingColor}>Запропонувати нічию</button>
-          <button className="danger" onClick={resignGame} disabled={thinking}>Здатися</button>
+          <button onClick={() => void offerDraw()} disabled={thinking || game.current.turn() !== trainingColor}>{t('offerDraw')}</button>
+          <button className="danger" onClick={resignGame} disabled={thinking}>{t('resign')}</button>
         </div>
       )}
 
       {screen === 'rating' && ratingStage === 'between' && (
-        <button className="primary" onClick={() => startRating('b')}>Зіграти другу партію чорними <span>→</span></button>
+        <button className="primary" onClick={() => startRating('b')}>{t('playBlackGame')} <span>→</span></button>
       )}
 
       {screen === 'rating' && ratingResult && (
         <section className="rating-result">
-          <small>Приблизна оцінка гри</small>
+          <small>{t('approximateRating')}</small>
           <strong>≈ {ratingResult.center}</strong>
-          <p>Діапазон: {ratingResult.low}–{ratingResult.high}. Точність ходів: {ratingResult.accuracy}%. Серйозних помилок: {ratingResult.seriousErrors}, із них грубих: {ratingResult.blunders}. Завершено обидві партії: білими й чорними.</p>
-          <button className="primary" onClick={() => startRating('w')}>Повторити оцінювання <span>→</span></button>
+          <p>{t('ratingResults', { low: ratingResult.low, high: ratingResult.high, accuracy: ratingResult.accuracy, errors: ratingResult.seriousErrors, blunders: ratingResult.blunders })}</p>
+          <button className="primary" onClick={() => startRating('w')}>{t('ratingRepeat')} <span>→</span></button>
         </section>
       )}
 
       {gameFinished && !analysisOpen && gameHistory.current.length > 0 && (
-        <button className="primary analysis-start" onClick={() => void analyseGame()}>Проаналізувати всю партію <span>→</span></button>
+        <button className="primary analysis-start" onClick={() => void analyseGame()}>{t('analyseWholeGame')} <span>→</span></button>
       )}
 
     </main>

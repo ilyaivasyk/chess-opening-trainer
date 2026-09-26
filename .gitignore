@@ -5,3 +5,7 @@ vite.config.js
 vite.config.d.ts
 .DS_Store
 
+# Paid lesson content lives in a separate private repository.
+src/data/native-premium.json
+ios/App/App/native-premium.json
+scripts/generate-premium.mjs

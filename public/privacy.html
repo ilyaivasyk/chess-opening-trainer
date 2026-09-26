@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Дебют — Privacy Policy / Політика конфіденційності</title>
+    <style>
+      :root { font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e9eee9; background: #101514; }
+      body { max-width: 720px; margin: 0 auto; padding: 24px 20px 64px; }
+      h1 { font-size: 1.7rem; line-height: 1.25; }
+      h2 { font-size: 1.2rem; margin-top: 1.6em; }
+      p, li { color: #cbd4cd; }
+      a { color: #a4e2b4; }
+      section { padding-top: 12px; }
+      .updated { color: #aeb9b0; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <section id="uk" lang="uk">
+      <h1>Політика конфіденційності «Дебют»</h1>
+      <p class="updated">Оновлено 26 вересня 2026 року. Ця політика стосується застосунку «Дебют» для iPhone та його вебверсії.</p>
+
+      <h2>Ігрові дані</h2>
+      <p>Шахові партії та аналіз обробляються на вашому пристрої. Шаховий рушій входить до складу застосунку. Ми не маємо облікових записів, реклами, аналітичних засобів або власного сервера для ігрових даних. Застосунок не надсилає нам ваші ходи, партії чи результати.</p>
+      <p>У локальному сховищі пристрою зберігаються вибрана мова, позначки переглянутої теорії та приблизна оцінка рейтингу. Після першої з двох партій для оцінювання тимчасово зберігається її показник; він видаляється після завершення другої партії. Поточна партія, історія ходів та аналіз зберігаються в пам’яті під час роботи застосунку та зникають після його закриття або оновлення сторінки.</p>
+
+      <h2>Підписка в застосунку для iPhone</h2>
+      <p>Покупки обробляє Apple через App Store. Застосунок отримує від StoreKit відомості про товари та підтверджений стан підписки, щоб відкрити доступ Pro. Ми не отримуємо в застосунку дані платіжної картки чи вашого Apple Account. Робота App Store і обробка покупок описані в <a href="https://www.apple.com/legal/privacy/data/en/itunes-store/">інформації Apple про конфіденційність</a>.</p>
+
+      <h2>Вебверсія та сторонні посилання</h2>
+      <p>Вебверсію розміщено на GitHub Pages. Під час її відкриття GitHub може обробляти технічні дані запиту відповідно до своєї <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">політики конфіденційності</a>. Якщо ви відкриваєте зовнішнє посилання, до відповідного сайту застосовується його власна політика.</p>
+
+      <h2>Ваш вибір і зв’язок</h2>
+      <p>Ви можете видалити локальні ігрові дані, очистивши дані сайту у браузері або видаливши застосунок з iPhone. Це не скасовує підписку Apple; керуйте нею в налаштуваннях Apple Account. З питаннями щодо цієї політики звертайтеся до <a href="https://github.com/ilyaivasyk/chess-opening-trainer">автора проєкту</a>.</p>
+    </section>
+
+    <section id="en" lang="en" hidden>
+      <h1>Début Privacy Policy</h1>
+      <p class="updated">Updated 26 September 2026. This policy covers the Début iPhone app and its web version.</p>
+
+      <h2>Game data</h2>
+      <p>Chess games and analysis run on your device. The chess engine is bundled with the app. We have no accounts, ads, analytics, or developer server for game data. The app does not send us your moves, games, or results.</p>
+      <p>Device-local storage keeps your selected language, viewed-theory markers, and approximate rating estimate. After the first of two assessment games, its rating sample is stored temporarily and removed after the second game. The current game, move history, and analysis stay in memory while the app is running and are lost when the app closes or the page reloads.</p>
+
+      <h2>iPhone subscriptions</h2>
+      <p>Apple processes purchases through the App Store. The app receives product information and verified subscription status from StoreKit to grant Pro access. The app does not receive your payment-card or Apple Account details. Apple describes its handling of App Store purchases in its <a href="https://www.apple.com/legal/privacy/data/en/itunes-store/">privacy information</a>.</p>
+
+      <h2>Web version and external links</h2>
+      <p>GitHub Pages hosts the web version. When you open it, GitHub may process technical request data under its <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>. External sites have their own privacy policies when you follow their links.</p>
+
+      <h2>Your choices and contact</h2>
+      <p>You can delete locally saved game data by clearing the site's data in your browser or deleting the iPhone app. This does not cancel an Apple subscription; manage that in Apple Account settings. For questions about this policy, contact the <a href="https://github.com/ilyaivasyk/chess-opening-trainer">project maintainer</a>.</p>
+    </section>
+    <script>
+      function showPolicyLanguage() {
+        const hash = location.hash.slice(1)
+        const locale = hash === 'uk' || hash === 'en' ? hash : navigator.language.toLowerCase().startsWith('uk') ? 'uk' : 'en'
+        document.getElementById('uk').hidden = locale !== 'uk'
+        document.getElementById('en').hidden = locale !== 'en'
+        document.documentElement.lang = locale
+      }
+      addEventListener('hashchange', showPolicyLanguage)
+      showPolicyLanguage()
+    </script>
+  </body>
+</html>

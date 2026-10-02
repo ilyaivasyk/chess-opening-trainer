@@ -8,8 +8,8 @@ const catalog = existsSync(privatePath) ? JSON.parse(await readFile(privatePath,
 const phrases = catalog ? [...catalog.uk, ...catalog.en]
   .map((course) => course.theory?.summary)
   .filter((phrase) => typeof phrase === 'string' && phrase.length >= 48) : []
-if (catalog && (phrases.length !== 98 || new Set(phrases).size !== 98)) {
-  throw new Error('Expected 98 distinct premium summaries to verify the web bundle.')
+if (catalog && (phrases.length !== catalog.uk.length + catalog.en.length || new Set(phrases).size !== phrases.length)) {
+  throw new Error('Expected one distinct premium summary per course and locale to verify the web bundle.')
 }
 
 const graph = await build({ entryPoints: ['src/App.tsx'], bundle: true, format: 'esm', write: false, metafile: true, logLevel: 'silent' })
@@ -35,4 +35,4 @@ async function check(directory) {
 }
 
 await check(root)
-console.log(`Verified private-content imports and assets are absent from ${root}${catalog ? '; checked all 98 private summaries.' : '; private-summary comparison skipped (private repository not present).'}`)
+console.log(`Verified private-content imports and assets are absent from ${root}${catalog ? `; checked all ${phrases.length} private summaries.` : '; private-summary comparison skipped (private repository not present).'}`)

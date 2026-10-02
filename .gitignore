@@ -9,3 +9,5 @@ vite.config.d.ts
 src/data/native-premium.json
 ios/App/App/native-premium.json
 scripts/generate-premium.mjs
+
+dist-owner-preview/

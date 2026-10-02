@@ -9,7 +9,8 @@
     "ios:sync": "node scripts/copy-native-premium.mjs && node scripts/check-catalog.mjs --require-native && npm run build && node scripts/verify-no-premium-web.mjs dist && cap sync ios && node scripts/verify-no-premium-web.mjs ios/App/App/public",
     "preview": "vite preview --host 0.0.0.0",
     "check:course": "node scripts/check-course.mjs",
-    "test:rating": "node scripts/test-full-rating.mjs"
+    "test:rating": "node scripts/test-full-rating.mjs",
+    "build:owner-preview": "tsc -b && vite build --mode owner-preview --outDir dist-owner-preview"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.2",

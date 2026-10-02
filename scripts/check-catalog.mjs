@@ -62,9 +62,9 @@ function compareContent(uk, en, where) {
           for (const [i, step] of scenario.steps.entries()) {
             textFilled(step.title, `${where}/${course.id}/${scenario.id}/${i}/title`)
             textFilled(step.explanation, `${where}/${course.id}/${scenario.id}/${i}/explanation`)
-            textFilled(step.opponentExplanation, `${where}/${course.id}/${scenario.id}/${i}/opponent`)
+            if (step.opponentMove) textFilled(step.opponentExplanation, `${where}/${course.id}/${scenario.id}/${i}/opponent`)
             play(step.userMove, side === 'scenarios' ? 'w' : 'b', i)
-            play(step.opponentMove, side === 'scenarios' ? 'b' : 'w', i)
+            if (step.opponentMove) play(step.opponentMove, side === 'scenarios' ? 'b' : 'w', i)
           }
         }
       }
@@ -84,7 +84,7 @@ function compareContent(uk, en, where) {
   }
 }
 
-assert(catalogUk.length === 60 && catalogEn.length === 60, 'Catalog must contain 60 entries in each locale')
+assert(catalogUk.length === 61 && catalogEn.length === 61, 'Catalog must contain 61 entries in each locale')
 const counts = { beginner: 0, intermediate: 0, advanced: 0 }
 const ids = new Set()
 for (const [i, entry] of catalogUk.entries()) {
@@ -98,7 +98,7 @@ for (const [i, entry] of catalogUk.entries()) {
   textFilled(entry.name, `${entry.id}/uk name`)
   textFilled(other.name, `${entry.id}/en name`)
 }
-for (const category of Object.keys(counts)) assert(counts[category] === 20, `${category}: expected 20, got ${counts[category]}`)
+for (const category of Object.keys(counts)) assert(counts[category] === (category === 'intermediate' ? 21 : 20), `${category}: unexpected count: ${counts[category]}`)
 assert(freeCourseIds.length === 11 && new Set(freeCourseIds).size === 11, 'Expected 11 unique free IDs')
 assert(freeUk.length === 11 && freeEn.length === 11, 'Expected 11 free course lessons')
 for (const id of freeCourseIds) assert(catalogUk.find((entry) => entry.id === id)?.access === 'free' && freeUk.some((course) => course.id === id), `Missing free course ${id}`)
@@ -109,15 +109,15 @@ for (const [locale, lessons, catalog] of [['uk', freeUk, catalogUk], ['en', free
 compareContent(freeUk, freeEn, 'free')
 
 if (fs.existsSync(nativePath)) {
-  assert(native.uk.length === 49 && native.en.length === 49, 'Expected 49 premium courses in native asset')
+  assert(native.uk.length === 50 && native.en.length === 50, 'Expected 50 premium courses in native asset')
   for (const entry of catalogUk.filter((entry) => entry.access === 'premium')) assert(native.uk.some((course) => course.id === entry.id), `Missing native course ${entry.id}`)
   for (const [locale, lessons, catalog] of [['uk', native.uk, catalogUk], ['en', native.en, catalogEn]]) {
     for (const lesson of lessons) assert(catalog.find((entry) => entry.id === lesson.id)?.name === lesson.name, `${locale}/${lesson.id}: catalog and native names differ`)
   }
   compareContent(native.uk, native.en, 'premium')
-  console.log('✓ 60 catalog entries; 11 free and 49 native courses; all UK/EN lines legal and aligned')
+  console.log('✓ 61 catalog entries; 11 free and 50 native courses; all UK/EN lines legal and aligned')
 } else if (process.argv.includes('--require-native')) {
   throw new Error(`Missing private native asset ${nativePath}`)
 } else {
-  console.log('✓ 60 catalog entries and 11 free courses; private native asset absent (premium lesson audit skipped)')
+  console.log('✓ 61 catalog entries and 11 free courses; private native asset absent (premium lesson audit skipped)')
 }

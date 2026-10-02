@@ -120,7 +120,7 @@ const english: Record<string, { name: string; theory: CourseTheory; variants: st
       keySquares: [{ square: 'e4', idea: 'The central square Black contests.' }, { square: 'c3', idea: 'The pinned knight can be exchanged.' }],
       warning: 'The bishop pair has value only if White can manage the pawn structure.',
     },
-    variants: ['All variations', 'Rubinstein Variation', 'Classical Variation', 'Sämisch Variation', 'Three Knights Variation', 'Leningrad Variation', 'Kmoch Variation', 'Spielmann Variation', 'Romanishin Variation', 'Hübner Variation', 'Zurich Variation'],
+    variants: ['All variations', 'Rubinstein Variation', 'Classical Variation', 'Sämisch Variation', 'Three Knights Variation', '4.Bg5 Variation', 'Kmoch Variation', 'Spielmann Variation', 'Romanishin Variation', 'Hübner Variation', 'Zurich Variation'],
   },
   grunfeld: {
     name: 'Grünfeld Defense',
@@ -238,7 +238,7 @@ function englishScenario(scenario: CourseScenario, name: string): CourseScenario
   const initialExplanation = scenario.initialMove ? convert(scenario.initialMove).explanation : undefined
   const steps = scenario.steps.map((step) => {
     const user = convert(step.userMove)
-    const opponent = convert(step.opponentMove)
+    const opponent = step.opponentMove ? convert(step.opponentMove) : { explanation: '' }
     return { userMove: step.userMove, title: user.title, explanation: user.explanation, opponentMove: step.opponentMove, opponentExplanation: opponent.explanation }
   })
   return { ...scenario, name, initialExplanation, steps }

@@ -27,3 +27,11 @@ The free courses retain their existing scenarios. Forty-nine paid courses add at
 The short move notes and goals are original descriptions of the displayed positions. We check move legality, turn order, both-color lesson structure, and Ukrainian/English parity with `node scripts/check-catalog.mjs --require-native`. We have **not** performed an engine MultiPV review, frequency analysis, or independent expert review of every theory sentence. These are introductions, not complete opening repertoires or a full trap-to-middlegame curriculum.
 
 Paid lesson text is stored only in the private content repository and the native iOS bundle. The public web build imports catalog metadata and eleven free lessons; its release process must continue checking that paid prose is absent from web assets.
+
+Additional reference checks (2026-10-02):
+- Bird: https://www.chess.com/openings/Birds-Opening — 1.f4, Dutch-style setups and From's Gambit.
+- Grob: https://www.chess.com/openings/Grob-Opening — 1.g4, ...d5/Bg2/...c6 setup; risky and weakens the king. Current native course is introductory, not complete coverage.
+- Petrov naming: https://www.chess.com/openings/Petrovs-Defense — alternative to Russian Game.
+
+Editorial correction pass (2026-10-02): reviewed the main move explanations of all 50 introductory private courses plus their extra scenarios. Corrected early Bb5/Bb4 “pin” claims where d7/d2 still blocked the king diagonal, Polish ...Nf6 incorrectly said to attack Be5, Taimanov ...Qc7 incorrectly said to directly support c5 through Nc6, and generic Bd6 “same diagonal” wording. F7 king captures lose castling rights; f7 is not a central square. These are board-geometry corrections, not a claim to have completed book-level independent review of every strategic plan.
+References: https://www.chess.com/openings/Ruy-Lopez-Opening ; https://www.chess.com/openings/Four-Knights-Game ; https://www.chess.com/openings/Polish-Opening ; https://raw.githubusercontent.com/lichess-org/chess-openings/master/a.tsv

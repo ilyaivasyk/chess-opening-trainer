@@ -8,7 +8,7 @@ export type { CourseCatalogEntry, CourseAccess } from './catalog'
 export type { Locale } from '../i18n/locale'
 
 export type CourseCategory = 'beginner' | 'intermediate' | 'advanced'
-export type CourseStep = { userMove: string; title: string; explanation: string; opponentMove: string; opponentExplanation: string }
+export type CourseStep = { userMove: string; title: string; explanation: string; opponentMove?: string; opponentExplanation: string }
 export type CourseScenario = { id: string; name: string; initialMove?: string; initialExplanation?: string; steps: CourseStep[] }
 export type CourseTheory = { history: string; summary: string; whiteGoals: string[]; blackGoals: string[]; keySquares: { square: string; idea: string }[]; warning: string }
 export type Course = {
@@ -85,7 +85,7 @@ const moveIdeas: Record<string, string> = {
   b2c3: 'Пішак відновлює матеріал і приймає здвоєну структуру заради пари слонів та центра.',
   b4a5: 'Слон відступає, не повертаючи темп, і продовжує затримувати розвиток білих.',
   b5a3: 'Кінь відступає на край, але зберігається для повернення через c2 або b1.',
-  b5a4: 'Слон зберігає зв’язку коня c6 та чекає слушного моменту для розміну.',
+  b5a4: 'Слон зберігає тиск на коня c6 та чекає слушного моменту для розміну.',
   b7b5: 'Чорні отримують простір на ферзевому фланзі та виганяють іспанського слона.',
   b8d7: 'Кінь підтримує f6 і центральні прориви, не перекриваючи пішак c.',
   c1e3: 'Слон завершує розвиток, прикриває центр і готує ферзя до спільної атаки.',
@@ -127,7 +127,7 @@ const moveIdeas: Record<string, string> = {
   b2b3: 'Білі захищають b2 від ферзя та готують розвиток слона на b2.',
   b4c5: 'Слон забирає центрального пішака й виходить із зв’язки з конем.',
   b5c4: 'Слон повертається на активну діагональ і зберігає тиск на центр.',
-  c1d2: 'Слон розриває зв’язку коня, з’єднує тури й готує розвиток ферзевого флангу.',
+  c1d2: 'Слон розвивається на d2 та допомагає прикрити діагональ до короля.',
   c3d1: 'Кінь відновлює ферзя після розміну й веде гру до раннього мітельшпілю без ферзів.',
   c5f2: 'Слон жертвується на f2 із шахом, витягуючи короля та запускаючи контратаку.',
   c6d4: 'Кінь забирає центральну фігуру й використовує відкритий форпост d4.',
@@ -195,13 +195,13 @@ function scenarios(lines: RepertoireLine[], color: 'white' | 'black'): CourseSce
     })
     const steps: CourseStep[] = []
     const start = color === 'white' ? 0 : 1
-    for (let index = start; index + 1 < line.moves.length; index += 2) {
+    for (let index = start; index < line.moves.length; index += 2) {
       steps.push({
         userMove: line.moves[index],
         title: titleFor(line.moves[index]),
         explanation: notes[index],
         opponentMove: line.moves[index + 1],
-        opponentExplanation: notes[index + 1],
+        opponentExplanation: notes[index + 1] ?? '',
       })
     }
     return {
@@ -370,7 +370,7 @@ const nimzoIndian = makeCourse('nimzo-indian', 'Захист Німцовича'
   { id: 'classical', name: 'Класичний варіант', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','d1c2','e8g8','e2e4','d7d5','e4e5','f6e4'] },
   { id: 'samisch', name: 'Варіант Земіша', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','a2a3','b4c3','b2c3','e8g8','f2f3','d7d5'] },
   { id: 'three-knights', name: 'Варіант трьох коней', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','g1f3','e8g8','c1g5','d7d5','e2e3','c7c5'] },
-  { id: 'leningrad', name: 'Ленінградський варіант', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','c1g5','h7h6','g5h4','c7c5','d4d5','d7d6'] },
+  { id: 'leningrad', name: 'Варіант із 4.Bg5', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','c1g5','h7h6','g5h4','c7c5','d4d5','d7d6'] },
   { id: 'kmoch', name: 'Варіант Кмоха', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','f2f3','d7d5','a2a3','b4c3','b2c3','e8g8'] },
   { id: 'spielmann', name: 'Варіант Шпільмана', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','d1b3','c7c5','d4c5','b8c6','g1f3','b4c5'] },
   { id: 'romanischin', name: 'Варіант Романішина', moves: ['d2d4','g8f6','c2c4','e7e6','b1c3','f8b4','g2g3','e8g8','f1g2','d7d5','g1f3','c7c5'] },

@@ -38,6 +38,17 @@ class MockWorker {
       this.onmessage?.({ data: `info depth 4 score cp 17 pv ${uci}` })
       this.onmessage?.({ data: `bestmove ${uci}` })
     })
+    if (message.startsWith('go ') && ['bound', 'bound-only'].includes(this.scenario)) queueMicrotask(() => {
+      if (message.includes('searchmoves') && this.scenario === 'bound') {
+        this.onmessage?.({ data: 'info depth 12 score cp 40 pv b1c3 g8f6' })
+      } else {
+        this.onmessage?.({ data: 'info depth 12 score cp 7 upperbound pv b1c3 g8f6' })
+      }
+      this.onmessage?.({ data: 'bestmove b1c3 ponder g8f6' })
+    })
+    if (message.startsWith('go ') && this.scenario === 'no-move') queueMicrotask(() => {
+      this.onmessage?.({ data: 'bestmove (none)' })
+    })
   }
   terminate() {}
 }
@@ -68,6 +79,7 @@ try {
   const timeoutEngine = new StockfishEngine()
   await assert.rejects(timeoutEngine.analyse(fenBefore, 3000, 1), /did not respond in time/)
   assert.ok(workers[1].messages.includes('stop'), 'timed-out search must be stopped')
+  await assert.rejects(timeoutEngine.analyse(fenBefore, 3000, 1), /stopped/, 'late results must never finish another search on a timed-out worker')
   timeoutEngine.destroy()
 
   const cancelledEngine = new StockfishEngine()
@@ -94,7 +106,36 @@ try {
     new Chess(fen).move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] || 'q' })
   }
   longEngine.destroy()
-  console.log('✓ Matched score/PV, legal pre-move replay, 120-ply search, timeout, and cancellation')
+
+  const boundEngine = new StockfishEngine()
+  const boundWorker = workers.at(-1)
+  boundWorker.scenario = 'bound'
+  const recovered = await boundEngine.analyse(fenBefore, 3000, 1)
+  assert.equal(recovered.bestMove, 'b1c3')
+  assert.equal(recovered.scoreCp, 40, 'review must use the recovered exact score, never its earlier bound')
+  assert.deepEqual(recovered.principalVariation, ['b1c3', 'g8f6'])
+  assert.equal(boundWorker.messages.filter((message) => message.includes('searchmoves b1c3')).length, 1)
+  boundEngine.destroy()
+
+  const playingEngine = new StockfishEngine()
+  const playingWorker = workers.at(-1)
+  playingWorker.scenario = 'bound-only'
+  assert.equal(await playingEngine.bestMove(fenBefore, 1200), 'b1c3', 'a legal opponent move does not need a review-quality score')
+  assert.ok(!playingWorker.messages.some((message) => message.includes('searchmoves')), 'playing should not perform an extra scored search')
+  playingEngine.destroy()
+
+  const unscoredEngine = new StockfishEngine()
+  const unscoredWorker = workers.at(-1)
+  unscoredWorker.scenario = 'bound-only'
+  await assert.rejects(unscoredEngine.analyse(fenBefore, 3000, 1), /exact score/, 'an unresolved score must fail, not create a false completed review')
+  assert.equal(unscoredWorker.messages.filter((message) => message.includes('searchmoves')).length, 1, 'recovery must be bounded')
+  unscoredEngine.destroy()
+
+  const emptyEngine = new StockfishEngine()
+  workers.at(-1).scenario = 'no-move'
+  await assert.rejects(emptyEngine.analyse(fenBefore, 3000, 1), /unfinished position/, 'no move in a nonterminal position must not become a fake zero score')
+  emptyEngine.destroy()
+  console.log('✓ Matched score/PV, legal pre-move replay, 120-ply search, timeout/cancellation, exact-score recovery, and separate playing API')
 } finally {
   await unlink(runtimePath)
 }

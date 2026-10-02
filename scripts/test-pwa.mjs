@@ -14,7 +14,7 @@ class Events {
 }
 class Worker extends Events {
   state = 'installing'
-  release = 'v23'
+  release = 'v32'
   messages = []
   postMessage(message, ports = []) {
     this.messages.push(message)
@@ -189,7 +189,7 @@ function workerRuntime({ failAssets = false } = {}) {
 const installed = workerRuntime()
 await installed.dispatch('install')
 assert.equal(installed.fetches.length, 1, 'shell and asset manifest must come from the same fetch')
-const cache = installed.stores.get('debut-offline-v23')
+const cache = installed.stores.get('debut-offline-v32')
 assert.equal(await cache.get(installed.resolveKey('./index.html')).response.clone().text(), shell)
 assert.equal(await cache.get(installed.resolveKey('./')).response.clone().text(), shell)
 assert.ok(cache.has(installed.resolveKey('./assets/app.js')))
@@ -197,14 +197,14 @@ assert.ok(cache.has(installed.resolveKey('./stockfish/stockfish-19-lite-single.w
 assert.equal(installed.self.skipCalls, 0)
 let acknowledgedRelease
 await installed.dispatch('message', { data: 'GET_RELEASE', ports: [{ postMessage: ({ release }) => { acknowledgedRelease = release } }] })
-assert.equal(acknowledgedRelease, 'v23')
+assert.equal(acknowledgedRelease, 'v32')
 await installed.dispatch('message', { data: 'SKIP_WAITING' })
 assert.equal(installed.self.skipCalls, 1)
 await installed.dispatch('activate')
 assert.equal(installed.self.claimCalls, 1)
 assert.ok(!installed.stores.has('debut-offline-v20'))
 assert.ok(installed.stores.has('another-app'), 'do not delete another app\'s caches')
-const navigation = await installed.dispatch('fetch', { request: { url: 'https://example.test/chess-opening-trainer/?v=23', method: 'GET', mode: 'navigate' } })
+const navigation = await installed.dispatch('fetch', { request: { url: 'https://example.test/chess-opening-trainer/?v=26', method: 'GET', mode: 'navigate' } })
 assert.equal(await navigation.text(), shell)
 const privacy = await installed.dispatch('fetch', { request: { url: 'https://example.test/chess-opening-trainer/privacy.html', method: 'GET', mode: 'navigate' } })
 assert.equal(await privacy.text(), './privacy.html', 'privacy iframe must not receive the app shell')

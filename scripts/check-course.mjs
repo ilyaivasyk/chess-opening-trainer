@@ -12,6 +12,7 @@ for (const scenario of [...course.scenarios, ...course.blackScenarios]) {
   }
   for (const [index, step] of scenario.steps.entries()) {
     for (const [side, uci] of [['user', step.userMove], ['opponent', step.opponentMove]]) {
+      if (!uci) continue
       const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' })
       if (!move) throw new Error(`${scenario.id}, крок ${index + 1}: нелегальний ${side} хід ${uci}`)
     }

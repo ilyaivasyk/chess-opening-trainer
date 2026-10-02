@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Chess, type Move, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
+import { MoveIcon, PieceIcon, CapturedPieces, KingResultBadge, resultLoser as getResultLoser } from './board-icons'
 import { courses, getCatalog, getCourses, type Course, type Locale } from './data/courses'
 import { StockfishEngine, type EngineStrength } from './stockfish'
 import { getPremiumCourses, getPremiumProducts, getPremiumStatus, isNativeIOS, onPremiumStatusChange, purchasePremium, restorePurchases, type PremiumProduct } from './native/purchases'
 import { applyPwaUpdate, getPwaStatus, onPwaStatusChange } from './pwa'
+import { detectOpeningKey, hasLostF7Pressure } from './review-context'
+import { analyseRecordedGame, gameAccuracy, gamePerformance, lichessMoveAccuracy, materialBalance, winPercent, type AnalysedMove, type AnalysisLabel, type GameMoveRecord, type MoveQuality } from './game-analysis'
+
+declare const __PREVIEW_COURSES__: { uk: Course[]; en: Course[] } | null
+const previewCourses = typeof __PREVIEW_COURSES__ === 'undefined' ? null : __PREVIEW_COURSES__
 
 type Mode = 'coach' | 'practice' | 'exam'
 type Screen = 'home' | 'theory' | 'train' | 'rating'
@@ -15,14 +21,6 @@ type PlayerColor = 'w' | 'b'
 type RatingStage = 'playing' | 'between' | 'complete'
 type ManualOutcome = 'resigned' | 'draw-agreed' | null
 type MoveActor = 'player' | 'engine' | 'course'
-type AnalysisLabel = 'brilliant' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder'
-
-type MoveQuality = {
-  cpLoss: number
-  accuracy: number
-  winDrop: number
-}
-
 type PlacementSample = {
   color: PlayerColor
   opponent: EngineStrength
@@ -43,22 +41,6 @@ type RatingResult = {
   blunders: number
 }
 
-type GameMoveRecord = {
-  ply: number
-  actor: MoveActor
-  color: PlayerColor
-  san: string
-  uci: string
-  from: Square
-  to: Square
-  captured?: Move['captured']
-  fenBefore: string
-  fenAfter: string
-  bookMove: boolean
-  openingName: string
-  openingNote?: { kind: 'f7' } | { kind: 'deviation'; stepIndex: number }
-}
-
 type MoveBadge = {
   square: Square
   symbol: string
@@ -66,24 +48,11 @@ type MoveBadge = {
   tone: 'theory' | 'brilliant' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'departure'
 }
 
-type AnalysedMove = GameMoveRecord & {
-  cpLoss: number
-  winDrop: number
-  accuracy: number
-  bestMove: string | null
-  bestMoveSan: string | null
-  principalVariationSan: string[]
-  principalVariationFens: string[]
-  principalVariationUci: string[]
-  evaluationCp: number
-  label: AnalysisLabel
-}
-
 type LessonStep = {
   userMove: string
   title: string
   explanation: string
-  opponentMove: string
+  opponentMove?: string
   opponentExplanation: string
 }
 
@@ -264,6 +233,18 @@ const ui = {
   watchWhitePlan: { uk: 'Стеж за планом білих: {white} Твоя відповідь: {black}', en: 'Watch White’s plan: {white} Your reply: {black}' },
   gameReport: { uk: 'Звіт про партію', en: 'Game report' },
   analysisFinished: { uk: 'Аналіз завершено', en: 'Review complete' },
+  openingEnglish: { uk: 'Англійський початок', en: 'English Opening' },
+  openingGrunfeld: { uk: 'Захист Ґрюнфельда', en: 'Grünfeld Defence' },
+  openingQueenPawn: { uk: 'Дебют ферзевого пішака', en: 'Queen’s Pawn Opening' },
+  insufficientLevelEvidence: { uk: 'Недостатньо ходів поза теорією для оцінки рівня.', en: 'Not enough moves outside theory to estimate a playing level.' },
+  initialPosition: { uk: 'Початкова позиція', en: 'Starting position' },
+  initialPositionDetail: { uk: 'Переглядай партію з першого ходу або програй найкращу лінію.', en: 'Review the game from the first move or replay the best line.' },
+  evaluationWorking: { uk: 'Розрахунок переваги…', en: 'Evaluating the position…' },
+  promotionTitle: { uk: 'Обери фігуру для перетворення пішака', en: 'Choose a promotion piece' },
+  queen: { uk: 'Ферзь', en: 'Queen' },
+  rook: { uk: 'Тура', en: 'Rook' },
+  bishop: { uk: 'Слон', en: 'Bishop' },
+  knight: { uk: 'Кінь', en: 'Knight' },
   approximatePerformance: { uk: 'Приблизний рівень цієї партії', en: 'Approximate level for this game' },
   yourAccuracy: { uk: 'Твоя точність', en: 'Your accuracy' },
   gameFlow: { uk: 'Перебіг партії', en: 'Game progress' },
@@ -368,20 +349,6 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function winPercent(centipawns: number) {
-  return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * centipawns)) - 1)
-}
-
-function lichessMoveAccuracy(winDrop: number) {
-  return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * winDrop) - 3.1669))
-}
-
-function gameAccuracy(moves: MoveQuality[]) {
-  const arithmetic = moves.reduce((sum, move) => sum + move.accuracy, 0) / moves.length
-  const harmonic = moves.length / moves.reduce((sum, move) => sum + 1 / Math.max(1, move.accuracy), 0)
-  return (arithmetic + harmonic) / 2
-}
-
 function estimateRange(accuracy: number, seriousErrors: number, blunders: number, totalMoves: number, samples: PlacementSample[]) {
   let quality = accuracy < 45 ? 400
     : accuracy < 58 ? 600
@@ -433,32 +400,15 @@ function buildOpeningBook(courseList: Course[]) {
     if (scenario.initialMove) add(scenario.initialMove)
     for (const step of scenario.steps) {
       add(step.userMove)
-      add(step.opponentMove)
+      if (step.opponentMove) add(step.opponentMove)
     }
   }
   return book
 }
 
 function detectOpening(moves: string[], locale: Locale) {
-  const starts = (...line: string[]) => line.every((move, index) => moves[index] === move)
-  if (starts('d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4')) return translate(locale, 'openingNimzo')
-  if (starts('d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'f8g7')) return translate(locale, 'openingKingsIndian')
-  if (starts('e2e4', 'c7c5')) return translate(locale, 'openingSicilian')
-  if (starts('e2e4', 'c7c6')) return translate(locale, 'openingCaroKann')
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5')) return translate(locale, 'openingRuyLopez')
-  if (starts('d2d4', 'd7d5', 'c2c4', 'e7e6')) return translate(locale, 'openingQgd')
-  if (starts('d2d4', 'd7d5', 'c2c4')) return translate(locale, 'openingQueenGambit')
-  if (starts('d2d4', 'd7d5', 'g1f3', 'g8f6', 'c1f4') || starts('d2d4', 'g8f6', 'g1f3', 'd7d5', 'c1f4')) return translate(locale, 'openingLondon')
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6')) return translate(locale, 'openingTwoKnights')
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5')) {
-    if (moves.includes('c2c3') && moves.includes('d2d3')) return translate(locale, 'openingPianissimo')
-    return translate(locale, 'openingGiuocoPiano')
-  }
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4')) return translate(locale, 'openingItalian')
-  if (starts('e2e4', 'e7e5', 'g1f3', 'b8c6')) return translate(locale, 'openingOpenKnight')
-  if (starts('e2e4', 'e7e5')) return translate(locale, 'openingOpen')
-  if (starts('e2e4')) return translate(locale, 'openingKingPawn')
-  return translate(locale, 'openingUnknown')
+  const key = detectOpeningKey(moves)
+  return key.startsWith('course:') ? getCatalog(locale).find((course) => course.id === key.slice(7))?.name ?? translate(locale, 'openingUnknown') : translate(locale, key as UiKey)
 }
 
 function badgeForAnalysis(move: AnalysedMove, locale: Locale): MoveBadge {
@@ -483,78 +433,25 @@ function badgePosition(square: Square, orientation: PlayerColor): CSSProperties 
   return { left: `${column * 12.5 + 7.5}%`, top: `${row * 12.5 + .7}%` }
 }
 
-function materialBalance(position: Chess, color: PlayerColor) {
-  const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
-  return position.board().flat().reduce((total, piece) => total + (piece ? values[piece.type] * (piece.color === color ? 1 : -1) : 0), 0)
-}
-
 function capturedMaterial(moves: { color: PlayerColor; captured?: Move['captured'] }[], capturer: PlayerColor) {
   const victim = capturer === 'w' ? 'b' : 'w'
-  const symbols = victim === 'w'
-    ? { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' }
-    : { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' }
   const order = ['q', 'r', 'b', 'n', 'p'] as const
-  const captures = moves.filter((move) => move.color === capturer && move.captured && move.captured !== 'k').map((move) => move.captured as (typeof order)[number])
-  const pieces = order.flatMap((piece) => captures.filter((captured) => captured === piece).map(() => symbols[piece]))
+  const captures = moves.filter((move) => move.color === capturer && move.captured && move.captured !== 'k')
+  const pieces = order.flatMap((type) => {
+    const count = captures.filter((move) => move.captured === type).length
+    return count ? [{ type, color: victim as PlayerColor, count }] : []
+  })
   return { pieces }
-}
-
-function isGoodPieceSacrifice(move: GameMoveRecord, cpLoss: number, beforeScore: number, afterScore: number) {
-  const before = new Chess(move.fenBefore)
-  const movedPiece = before.get(move.from)
-  if (!movedPiece || !['n', 'b', 'r', 'q'].includes(movedPiece.type) || cpLoss > 25 || beforeScore >= 500 || -afterScore < -150) return false
-  if (before.isAttacked(move.from, move.color === 'w' ? 'b' : 'w')) return false
-  const balanceBefore = materialBalance(before, move.color)
-  const after = new Chess(move.fenAfter)
-  return after.moves({ verbose: true })
-    .filter((reply) => reply.to === move.to && Boolean(reply.captured))
-    .some((reply) => {
-      const line = new Chess(move.fenAfter)
-      line.move(reply)
-      return materialBalance(line, move.color) <= balanceBefore - 2
-    })
-}
-
-function moveLabel(winDrop: number, bestMove: string | null, playedMove: string, brilliant: boolean): AnalysisLabel {
-  if (brilliant) return 'brilliant'
-  if (bestMove === playedMove || winDrop <= .5) return 'best'
-  if (winDrop <= 2) return 'excellent'
-  if (winDrop <= 5) return 'good'
-  if (winDrop <= 10) return 'inaccuracy'
-  if (winDrop <= 20) return 'mistake'
-  return 'blunder'
 }
 
 function variationToSan(fen: string, moves: string[], limit = 6) {
   const position = new Chess(fen)
   const san: string[] = []
   for (const uci of moves.slice(0, limit)) {
-    const move = moveParts(uci)
-    try {
-      san.push(position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' }).san)
-    } catch { break }
+    try { san.push(position.move(moveParts(uci)).san) }
+    catch { break }
   }
   return san
-}
-
-function variationPositions(fen: string, moves: string[]) {
-  const position = new Chess(fen)
-  const positions = [fen]
-  for (const uci of moves) {
-    const move = moveParts(uci)
-    try {
-      position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
-      positions.push(position.fen())
-    } catch { break }
-  }
-  return positions
-}
-
-function gamePerformance(accuracy: number, opponent: EngineStrength, score: number) {
-  const quality = accuracy < 45 ? 400 : accuracy < 58 ? 600 : accuracy < 70 ? 850 : accuracy < 80 ? 1100 : accuracy < 88 ? 1400 : accuracy < 93 ? 1750 : accuracy < 96 ? 2000 : 2300
-  const opponentRating = opponent === 3000 ? 2600 : opponent
-  const resultRating = opponentRating + (score === 1 ? 200 : score === .5 ? 0 : -200)
-  return Math.max(100, Math.min(2800, Math.round(((quality + resultRating) / 2) / 50) * 50))
 }
 
 function gameResultText(position: Chess, outcome: ManualOutcome, locale: Locale) {
@@ -627,6 +524,7 @@ function App() {
   const [purchaseBusy, setPurchaseBusy] = useState(false)
   const [purchaseMessage, setPurchaseMessage] = useState('')
   const [category, setCategory] = useState<Category>('beginner')
+  const [unconventionalOnly, setUnconventionalOnly] = useState(false)
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0].id)
   const [colorFilter, setColorFilter] = useState<ColorFilter>('all')
   const [variantFilter, setVariantFilter] = useState<VariantFilter>('all')
@@ -657,6 +555,9 @@ function App() {
   const [analysisItems, setAnalysisItems] = useState<AnalysedMove[]>([])
   const [analysisIndex, setAnalysisIndex] = useState(0)
   const [variationPly, setVariationPly] = useState<number | null>(null)
+  const [variationEvaluation, setVariationEvaluation] = useState<{ fen: string; cp: number | null } | null>(null)
+  const [promotion, setPromotion] = useState<{ from: Square; to: Square } | null>(null)
+  const promotionDialog = useRef<HTMLDialogElement>(null)
   const [ratingMoves, setRatingMoves] = useState<MoveQuality[]>([])
   const [ratingResult, setRatingResult] = useState<RatingResult | null>(null)
   const [playerColor, setPlayerColor] = useState<PlayerColor>('w')
@@ -667,12 +568,14 @@ function App() {
   const colorName = (color: PlayerColor) => t(color === 'w' ? 'white' : 'black')
   const savedRating = readJson<RatingResult | null>(ratingKey, null)
   const localizedCourses = getCourses(locale)
-  const availableCourses = [...localizedCourses, ...premiumCourses]
+  const availableCourses = [...localizedCourses, ...(previewCourses?.[locale] ?? premiumCourses)]
+  const catalogUnlocked = premium || previewCourses !== null
   const catalog = getCatalog(locale)
   const selectedEntry = catalog.find((course) => course.id === selectedCourseId) ?? catalog[0]
   const selectedLesson = availableCourses.find((course) => course.id === selectedCourseId)
   const selectedCourse = selectedLesson ?? localizedCourses[0]
-  const visibleCourses = catalog.filter((course) => course.category === category)
+  const unconventionalIds = new Set(['bird', 'grob', 'larsen', 'polish', 'kings-gambit', 'budapest', 'benko-gambit'])
+  const visibleCourses = catalog.filter((course) => unconventionalOnly ? unconventionalIds.has(course.id) : course.category === category)
   const openingBook = useMemo(() => buildOpeningBook(availableCourses), [locale, premiumCourses])
 
   const activeScenario = (trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios).find((item) => item.id === scenario.id) ?? scenario
@@ -681,21 +584,21 @@ function App() {
   const hint = screen === 'train' && current && (mode === 'coach' || practiceCorrection) ? moveParts(current.userMove) : null
   const playerSide = screen === 'rating' ? playerColor : trainingColor
   const gameFinished = Boolean(manualOutcome) || game.current.isGameOver()
-  const analysedMove = analysisItems[analysisIndex]
+  const analysedMove = analysisItems[Math.max(0, analysisIndex)]
   const analysisOpeningName = analysedMove ? detectOpening(analysisItems.slice(0, analysisIndex + 1).map((item) => item.uci), locale) : ''
-  const analysisOpeningNote = analysedMove?.openingNote?.kind === 'f7' ? t('f7Idea')
+  const analysisOpeningNote = analysisIndex < 0 ? '' : analysedMove?.openingNote?.kind === 'f7' ? t('f7Idea')
     : analysedMove?.openingNote?.kind === 'deviation' ? t('expectedMove', {
       move: activeScenario.steps[analysedMove.openingNote.stepIndex]?.userMove ?? '',
       explanation: activeScenario.steps[analysedMove.openingNote.stepIndex]?.explanation ?? '',
     }) : ''
   const displayedFen = analysisOpen && analysedMove
-    ? variationPly === null ? analysedMove.fenAfter : analysedMove.principalVariationFens[variationPly] ?? analysedMove.fenAfter
+    ? analysisIndex < 0 ? analysedMove.fenBefore : variationPly === null ? analysedMove.fenAfter : analysedMove.principalVariationFens[variationPly] ?? analysedMove.fenAfter
     : fen
   const displayedBadge = analysisOpen && analysedMove
-    ? variationPly === null ? badgeForAnalysis(analysedMove, locale) : null
+    ? analysisIndex < 0 ? null : variationPly === null ? badgeForAnalysis(analysedMove, locale) : null
     : moveBadge
   const displayedLastMove = analysisOpen && analysedMove
-    ? variationPly === null ? { from: analysedMove.from, to: analysedMove.to }
+    ? analysisIndex < 0 ? null : variationPly === null ? { from: analysedMove.from, to: analysedMove.to }
       : variationPly > 0 ? moveParts(analysedMove.principalVariationUci[variationPly - 1]) : null
     : lastMove
   const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
@@ -703,16 +606,25 @@ function App() {
   const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(playerAnalysis)) : 0
   const opponentAccuracy = opponentAnalysis.length ? Math.round(gameAccuracy(opponentAnalysis)) : 0
   const playerScore = manualOutcome === 'resigned' ? 0 : manualOutcome === 'draw-agreed' || game.current.isDraw() ? .5 : game.current.isCheckmate() ? (game.current.turn() === playerSide ? 0 : 1) : .5
-  const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore)
+  const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore, playerAnalysis.filter((item) => !item.bookMove).length)
   const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
   const bookMoveCount = playerAnalysis.filter((item) => item.bookMove).length
   const resultTitle = t(playerScore === 1 ? 'victory' : playerScore === .5 ? 'draw' : 'defeat')
   const displayedPosition = useMemo(() => new Chess(displayedFen), [displayedFen])
   const checkedKingSquare = displayedPosition.isCheck() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
-  const mateLoserSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
-  const mateWinnerSquare = displayedPosition.isCheckmate() ? kingSquare(displayedPosition, displayedPosition.turn() === 'w' ? 'b' : 'w') : null
-  const currentEvaluation = analysedMove?.evaluationCp ?? 0
-  const visibleEvaluation = variationPly === null ? currentEvaluation : null
+  const finalBoard = !analysisOpen || (variationPly === null && analysisIndex === analysisItems.length - 1)
+  const resultLoser = getResultLoser(displayedPosition, manualOutcome === 'resigned', playerSide, finalBoard)
+  const mateLoserSquare = resultLoser ? kingSquare(displayedPosition, resultLoser) : null
+  const mateWinnerSquare = resultLoser ? kingSquare(displayedPosition, resultLoser === 'w' ? 'b' : 'w') : null
+  const boardResultLabel = locale === 'uk' ? (displayedPosition.isCheckmate() ? 'Шах і мат' : 'Здався') : (displayedPosition.isCheckmate() ? 'Checkmate' : 'Resigned')
+  const winnerLabel = locale === 'uk' ? 'Переможець' : 'Winner'
+  const resultBadges = <>
+    {mateLoserSquare && <KingResultBadge key={`loss-${mateLoserSquare}-${boardResultLabel}`} kind="loss" label={boardResultLabel} style={badgePosition(mateLoserSquare, playerSide)} />}
+    {mateWinnerSquare && <KingResultBadge key={`win-${mateWinnerSquare}`} kind="win" label={winnerLabel} style={badgePosition(mateWinnerSquare, playerSide)} />}
+  </>
+  const currentEvaluation = analysisIndex < 0 ? analysedMove?.beforeEvaluationCp ?? 0 : analysedMove?.evaluationCp ?? 0
+  const visibleEvaluation = variationPly === null ? currentEvaluation : variationPly === 0 ? analysedMove?.beforeEvaluationCp ?? null : variationEvaluation?.fen === displayedFen ? variationEvaluation.cp : null
+  const variationEvaluationFailed = variationEvaluation?.fen === displayedFen && variationEvaluation.cp === null
   const evaluationWhite = visibleEvaluation === null ? 50 : Math.abs(visibleEvaluation) >= 9000 ? (visibleEvaluation > 0 ? 100 : 0) : Math.max(5, Math.min(95, winPercent(visibleEvaluation)))
   const graphPoints = analysisItems.map((item, index) => {
     const x = analysisItems.length <= 1 ? 10 : 10 + index * 300 / (analysisItems.length - 1)
@@ -743,6 +655,25 @@ function App() {
     engine.current = new StockfishEngine()
     return () => engine.current?.destroy()
   }, [])
+
+  useEffect(() => {
+    if (!analysisOpen || analysisBusy || variationPly === null || variationPly === 0) return
+    const cached = analysisItems.find((item) => item.fenAfter === displayedFen || item.fenBefore === displayedFen)
+    if (cached) {
+      setVariationEvaluation({ fen: displayedFen, cp: cached.fenAfter === displayedFen ? cached.evaluationCp : cached.beforeEvaluationCp })
+      return
+    }
+    const reviewer = new StockfishEngine()
+    let cancelled = false
+    void reviewer.analyse(displayedFen, 3000, 300).then((result) => {
+      if (!cancelled) setVariationEvaluation({ fen: displayedFen, cp: new Chess(displayedFen).turn() === 'w' ? result.scoreCp : -result.scoreCp })
+    }).catch(() => { if (!cancelled) setVariationEvaluation({ fen: displayedFen, cp: null }) }).finally(() => reviewer.destroy())
+    return () => { cancelled = true; reviewer.destroy() }
+  }, [analysisOpen, analysisBusy, displayedFen, variationPly, analysisItems])
+
+  useEffect(() => {
+    if (promotion && !promotionDialog.current?.open) promotionDialog.current?.showModal()
+  }, [promotion])
 
   useEffect(() => onPwaStatusChange(setPwaStatus), [])
 
@@ -782,7 +713,7 @@ function App() {
 
   async function changeLocale(next: Locale) {
     if (next === locale) return
-    if (premium && premiumCourses.length) {
+    if (nativeIOS && premium && premiumCourses.length) {
       try { setPremiumCourses(await getPremiumCourses(next)) }
       catch { setPurchaseMessage(t('lessonLoadFailed')); return }
     }
@@ -866,10 +797,23 @@ function App() {
     }
   }
 
+  async function bestMoveSafely(position: string, engineStrength: EngineStrength) {
+    if (!engine.current) throw new Error(t('stockfishNotStarted'))
+    const activeEngine = engine.current
+    try { return await activeEngine.bestMove(position, engineStrength) }
+    catch {
+      if (engine.current !== activeEngine) throw new Error('Stockfish search was stopped')
+      restartEngine()
+      return await engine.current!.bestMove(position, engineStrength)
+    }
+  }
+
   function resetGameState() {
     gameSession.current += 1
     restartEngine()
     gameHistory.current = []
+    setPromotion(null)
+    setVariationEvaluation(null)
     setSelected(null)
     setLegalTargets([])
     setLastMove(null)
@@ -915,7 +859,7 @@ function App() {
     setVariationPly(next)
   }
 
-  function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: GameMoveRecord['openingNote']) {
+  function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: GameMoveRecord['openingNote'], explanation?: string) {
     const uci = `${played.from}${played.to}${played.promotion ?? ''}`
     gameHistory.current.push({
       ply: gameHistory.current.length + 1,
@@ -931,14 +875,15 @@ function App() {
       bookMove: openingBook.has(`${positionKey(beforeFen)}|${uci}`),
       openingName: detectOpening([...gameHistory.current.map((move) => move.uci), uci], locale),
       openingNote,
+      openingExplanation: explanation ?? (actor === 'player' && current?.userMove === uci ? current.explanation
+        : actor === 'course' && current?.opponentMove === uci ? current.opponentExplanation
+        : actor === 'course' && activeScenario.initialMove === uci ? activeScenario.initialExplanation : undefined),
     })
   }
 
   function openingIdeaNote(beforeFen: string, afterFen: string, color: PlayerColor): GameMoveRecord['openingNote'] {
     if (color !== 'w') return undefined
-    const before = new Chess(beforeFen)
-    const after = new Chess(afterFen)
-    if (before.isAttacked('f7', 'w') && !after.isAttacked('f7', 'w')) {
+    if (hasLostF7Pressure(beforeFen, afterFen)) {
       return { kind: 'f7' }
     }
     return undefined
@@ -976,7 +921,7 @@ function App() {
       const initial = moveParts(selectedScenario.initialMove)
       const beforeFen = game.current.fen()
       const played = game.current.move({ from: initial.from, to: initial.to, promotion: initial.promotion || 'q' })
-      recordMove(beforeFen, played, 'course')
+      recordMove(beforeFen, played, 'course', undefined, selectedScenario.initialExplanation)
       setFen(game.current.fen())
       setLastMove({ from: played.from, to: played.to })
     }
@@ -989,7 +934,7 @@ function App() {
   }
 
   async function beginFromMenu() {
-    if (selectedEntry.access === 'premium' && !premium) {
+    if (selectedEntry.access === 'premium' && !catalogUnlocked) {
       if (nativeIOS) setPaywallOpen(true)
       return
     }
@@ -1067,17 +1012,25 @@ function App() {
     playUserMove(selected, square)
   }
 
-  function playUserMove(from: Square, to: Square): boolean {
+  function playUserMove(from: Square, to: Square, promotionPiece?: 'q' | 'r' | 'b' | 'n'): boolean {
     const userColor = playerSide
     if (thinking || manualOutcome || analysisOpen || game.current.isGameOver() || game.current.turn() !== userColor) return false
     const piece = game.current.get(from)
     if (!piece || piece.color !== userColor) return false
-    const legalMove = game.current.moves({ square: from, verbose: true }).find((move) => move.to === to)
+    const legalMoves = game.current.moves({ square: from, verbose: true }).filter((move) => move.to === to)
+    if (!promotionPiece && legalMoves.some((move) => move.promotion)) {
+      setPromotion({ from, to })
+      setSelected(null)
+      setLegalTargets([])
+      return false
+    }
+    const legalMove = legalMoves.find((move) => !move.promotion || move.promotion === promotionPiece)
     if (!legalMove) {
       setFeedback(t('illegalMove'))
       return false
     }
 
+    setPromotion(null)
     const beforeFen = game.current.fen()
     const played = game.current.move({ from, to, promotion: legalMove.promotion || 'q' })
     playMoveSound(played)
@@ -1221,6 +1174,14 @@ function App() {
   }
 
   function playCourseReply(lesson: LessonStep) {
+    if (!lesson.opponentMove) {
+      setStep(step + 1)
+      setFreePlay(true)
+      setThinking(false)
+      setFeedback(mode === 'exam' ? '' : t('openingDone', { explanation: lesson.explanation }))
+      void requestEngineMove()
+      return
+    }
     const reply = moveParts(lesson.opponentMove)
     const beforeFen = game.current.fen()
     const played = game.current.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' })
@@ -1273,11 +1234,11 @@ function App() {
     setEngineFailure(null)
     if (ratingGame || mode !== 'exam') setFeedback(t('stockfishThinking'))
     try {
-      const result = await analyseSafely(game.current.fen(), engineStrength, engineStrength >= 2000 ? 700 : 350)
+      const bestMove = await bestMoveSafely(game.current.fen(), engineStrength)
       if (session !== gameSession.current || manualOutcome) return
-      if (!result.bestMove && !game.current.isGameOver()) throw new Error('Stockfish returned no legal move')
-      if (result.bestMove) {
-        const move = moveParts(result.bestMove)
+      if (!bestMove && !game.current.isGameOver()) throw new Error('Stockfish returned no legal move')
+      if (bestMove) {
+        const move = moveParts(bestMove)
         const beforeFen = game.current.fen()
         const played = game.current.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
         playMoveSound(played)
@@ -1372,57 +1333,15 @@ function App() {
     setAnalysisItems([])
     setSelected(null)
     setLegalTargets([])
-    const cache = new Map<string, Awaited<ReturnType<typeof analyseSafely>>>()
-    const analysed: AnalysedMove[] = []
-    const replay = new Chess()
+    let completed = false
     try {
-      for (let index = 0; index < records.length; index += 1) {
-        if (session !== gameSession.current) return
-        const record = records[index]
-        if (replay.fen() !== record.fenBefore) throw new Error('Recorded positions do not match')
-        const recordedMove = moveParts(record.uci)
-        replay.move({ from: recordedMove.from, to: recordedMove.to, promotion: recordedMove.promotion || 'q' })
-        if (replay.fen() !== record.fenAfter) throw new Error('Recorded move is invalid')
-        let before = cache.get(record.fenBefore)
-        if (!before) {
-          before = await analyseSafely(record.fenBefore, 3000, 300)
-          cache.set(record.fenBefore, before)
-        }
-        let after = replay.isThreefoldRepetition() ? { bestMove: null, scoreCp: 0, principalVariation: [] } : cache.get(record.fenAfter)
-        if (!after) {
-          after = await analyseSafely(record.fenAfter, 3000, 300)
-          cache.set(record.fenAfter, after)
-        }
-        if (session !== gameSession.current) return
-        const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
-        const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
-        const rawPrincipalVariation = before.principalVariation.length ? before.principalVariation : before.bestMove ? [before.bestMove] : []
-        const positions = variationPositions(record.fenBefore, rawPrincipalVariation.slice(0, 6))
-        const legalVariation = rawPrincipalVariation.slice(0, positions.length - 1)
-        const bestMove = legalVariation[0] === before.bestMove ? before.bestMove : null
-        let brilliant = false
-        if (isGoodPieceSacrifice(record, cpLoss, before.scoreCp, after.scoreCp)) {
-          const deeperBefore = await analyseSafely(record.fenBefore, 3000, 1000)
-          const deeperAfter = await analyseSafely(record.fenAfter, 3000, 1000)
-          if (session !== gameSession.current) return
-          brilliant = Math.max(0, deeperBefore.scoreCp + deeperAfter.scoreCp) <= 35 && -deeperAfter.scoreCp >= -150
-        }
-        analysed.push({
-          ...record,
-          cpLoss,
-          winDrop,
-          accuracy: lichessMoveAccuracy(winDrop),
-          bestMove,
-          bestMoveSan: bestMove ? variationToSan(record.fenBefore, [bestMove], 1)[0] : null,
-          principalVariationSan: variationToSan(record.fenBefore, legalVariation),
-          principalVariationFens: positions,
-          principalVariationUci: legalVariation,
-          evaluationCp: new Chess(record.fenAfter).turn() === 'w' ? after.scoreCp : -after.scoreCp,
-          label: moveLabel(winDrop, bestMove, record.uci, brilliant),
-        })
-        setAnalysisItems([...analysed])
-        setAnalysisProgress(Math.round(((index + 1) / records.length) * 100))
-      }
+      const items = await analyseRecordedGame(records, analyseSafely, {
+        isCancelled: () => session !== gameSession.current,
+        onProgress: (items, progress) => { setAnalysisItems(items); setAnalysisProgress(progress) },
+      })
+      if (session !== gameSession.current) return
+      setAnalysisItems(items)
+      completed = true
     } catch (error) {
       if (session !== gameSession.current) return
       setAnalysisError(t('analysisStopped'))
@@ -1430,7 +1349,7 @@ function App() {
     } finally {
       if (session === gameSession.current) {
         setAnalysisBusy(false)
-        if (analysed.length === records.length) setAnalysisSummaryOpen(true)
+        if (completed) setAnalysisSummaryOpen(true)
       }
     }
   }
@@ -1445,8 +1364,8 @@ function App() {
     return (
       <main className="paywall-screen">
         <header className="paywall-header"><button className="icon-button" onClick={() => setPaywallOpen(false)} aria-label={t('close')}>×</button><strong>{t('debut')} Pro</strong><span /></header>
-        <div className="paywall-hero"><span>♛</span><h1>{t('reviewProTitle')}</h1><p>{t('reviewProDescription')}</p></div>
-        <div className="paywall-benefits"><div>♟ <span>{t('proBenefitCatalog')}</span></div><div>♜ <span>{t('proBenefitReview')}</span></div><div>♝ <span>{t('proBenefitLines')}</span></div></div>
+        <div className="paywall-hero"><PieceIcon type="q" color="w" /><h1>{t('reviewProTitle')}</h1><p>{t('reviewProDescription')}</p></div>
+        <div className="paywall-benefits"><div><PieceIcon type="p" color="w" /> <span>{t('proBenefitCatalog')}</span></div><div><PieceIcon type="r" color="w" /> <span>{t('proBenefitReview')}</span></div><div><PieceIcon type="b" color="w" /> <span>{t('proBenefitLines')}</span></div></div>
         {isNativeIOS() ? <>
           <div className="paywall-products">
             {products.map((product) => <button key={product.id} disabled={purchaseBusy} onClick={() => void buyPremium(product.id)}><span><strong>{product.displayName}</strong><small>{t(product.id.endsWith('yearly') ? 'yearly' : 'monthly')}</small></span><b>{product.displayPrice}</b></button>)}
@@ -1476,12 +1395,12 @@ function App() {
 
         <section className="play-menu">
           <button className="play-card rating-play" onClick={() => startRating('w')}>
-            <span className="play-icon">♟</span>
+            <span className="play-icon"><PieceIcon type="p" color="w" /></span>
             <span><strong>{t(savedRating ? 'ratingRepeat' : 'ratingDiscover')}</strong><small>{t(savedRating ? 'ratingRepeatDetail' : 'ratingDiscoverDetail')}</small></span>
             <b>→</b>
           </button>
           <div className="play-card lesson-play">
-            <span className="play-icon">♜</span>
+            <span className="play-icon"><MoveIcon symbol="📖" /></span>
             <span><strong>{t('openingTraining')}</strong><small>{t('trainingDetail')}</small></span>
           </div>
         </section>
@@ -1494,6 +1413,7 @@ function App() {
           <div className="category-tabs">
             {categories.map((item) => <button className={category === item.id ? 'active' : ''} onClick={() => {
               setCategory(item.id)
+              setUnconventionalOnly(false)
               const first = catalog.find((course) => course.category === item.id)
               if (first) setSelectedCourseId(first.id)
               setVariantFilter('all')
@@ -1505,18 +1425,19 @@ function App() {
               if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
             }} key={id}>{t(label)}</button>)}
           </div>
-          <div key={category} className="opening-list" role="region" tabIndex={0} aria-label={t('openingList')}>
+          <button className={`unconventional-filter ${unconventionalOnly ? 'active' : ''}`} aria-pressed={unconventionalOnly} onClick={() => { setUnconventionalOnly(!unconventionalOnly); setVariantFilter('all') }}>{locale === 'uk' ? 'Нестандартні дебюти й гамбіти' : 'Unconventional openings and gambits'}</button>
+          <div key={`${category}-${unconventionalOnly}`} className="opening-list" role="region" tabIndex={0} aria-label={t('openingList')}>
             {visibleCourses.map((course, index) => (
-              <button className={`opening-card ${selectedEntry.id === course.id ? 'active' : ''} ${course.access === 'premium' && !premium ? 'locked' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
+              <button className={`opening-card ${selectedEntry.id === course.id ? 'active' : ''} ${course.access === 'premium' && !catalogUnlocked ? 'locked' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
                 <span className="opening-number">{String(index + 1).padStart(2, '0')}</span>
                 <span className="opening-copy"><strong>{course.name}</strong><small>{course.eco} · {t('bothColors')}</small></span>
-                <span className={`opening-tag ${course.access === 'premium' && !premium ? 'premium-tag' : ''}`}>{course.access === 'premium' && !premium ? nativeIOS ? '♛ Pro' : t('comingSoon') : t('available')}</span>
+                <span className={`opening-tag ${course.access === 'premium' && !catalogUnlocked ? 'premium-tag' : ''}`}>{course.access === 'premium' && !catalogUnlocked ? nativeIOS ? '♛ Pro' : t('comingSoon') : t('available')}</span>
               </button>
             ))}
           </div>
           <div className={`side-choice ${colorFilter === 'all' ? '' : 'single'}`} aria-label={t('sideLabel')}>
-            {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>{t('playWhite')}</strong><small>{t('whitePlan')}</small></button>}
-            {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>{t('playBlack')}</strong><small>{t('blackPlan')}</small></button>}
+            {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span><PieceIcon type="p" color="w" /></span><strong>{t('playWhite')}</strong><small>{t('whitePlan')}</small></button>}
+            {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span><PieceIcon type="p" color="b" /></span><strong>{t('playBlack')}</strong><small>{t('blackPlan')}</small></button>}
           </div>
           {selectedEntry.access === 'premium' && !selectedLesson ? <div className="locked-preview"><strong>{selectedEntry.name}</strong><span>{selectedEntry.eco} · {premium ? t('lessonLoading') : t(nativeIOS ? 'premiumLesson' : 'pwaLessonPending')}</span><a href={selectedEntry.source} target="_blank" rel="noopener noreferrer">{t('openingSource')} ↗</a>{nativeIOS && !premium && <button onClick={() => setPaywallOpen(true)}>{t('viewSubscription')} →</button>}</div> : <div className="variant-filter">
               <div><strong>{t('variation', { name: selectedEntry.name })}</strong><small>{t('variantsAvailable', { count: selectedCourse.variants.length - 1 })}</small></div>
@@ -1556,8 +1477,8 @@ function App() {
           </div>
         </section>
 
-        <button className="primary" disabled={!nativeIOS && !selectedLesson} onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !premium ? nativeIOS ? 'unlockPro' : 'comingSoon' : 'startTraining')} <span>→</span></button>
-        {!nativeIOS && <><p className="install-note">{t('pwaBeta')}</p><p className="install-note">{t('installIphone')}</p></>}
+        <button className="primary" disabled={!nativeIOS && !selectedLesson} onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !catalogUnlocked ? nativeIOS ? 'unlockPro' : 'comingSoon' : 'startTraining')} <span>→</span></button>
+        {!nativeIOS && <><p className="install-note">{previewCourses ? (locale === 'uk' ? 'Приватний тест · усі підготовлені курси відкриті. Вступні курси ще доповнюються.' : 'Private test · all prepared courses unlocked. Introductory courses are still being expanded.') : t('pwaBeta')}</p><p className="install-note">{t('installIphone')}</p></>}
         <button className="privacy-link" onClick={() => setPrivacyOpen(true)}>{t('privacyPolicy')}</button>
       </main>
     )
@@ -1566,7 +1487,7 @@ function App() {
   if (screen === 'theory') {
     const theory = selectedCourse.theory
     const preview = selectedCourse.scenarios.find((item) => variantFilter === 'all' || scenarioVariant(item) === variantFilter) ?? selectedCourse.scenarios[0]
-    const previewMoves = preview.steps.flatMap((item) => [item.userMove, item.opponentMove])
+    const previewMoves = preview.steps.flatMap((item) => [item.userMove, ...(item.opponentMove ? [item.opponentMove] : [])])
     const previewLine = variationToSan(new Chess().fen(), previewMoves, 8).join(' ')
     return (
       <main className="shell theory-screen">
@@ -1613,7 +1534,7 @@ function App() {
           <div><small>{t('analysisFinished')}</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome, locale)}</p></div>
         </section>
         <section className="report-rating">
-          <div><small>{t('approximatePerformance')}</small><strong>≈ {performanceRating}</strong></div>
+          <div><small>{t('approximatePerformance')}</small><strong>{performanceRating === null ? '—' : `≈ ${performanceRating}`}</strong>{performanceRating === null && <p className="rating-evidence">{t('insufficientLevelEvidence')}</p>}</div>
           <div><small>{t('yourAccuracy')}</small><strong>{analysisAccuracy}%</strong></div>
         </section>
         <section className="evaluation-chart" aria-label={t('evaluationChart')}>
@@ -1633,7 +1554,7 @@ function App() {
         <section className="quality-report">
           <h2>{t('yourMoves')}</h2>
           <div className="quality-summary">
-            <div><span className="quality theory">📖</span><strong>{bookMoveCount}</strong><small>{t('theory')}</small></div>
+            <div><span className="quality theory"><MoveIcon symbol="📖" /></span><strong>{bookMoveCount}</strong><small>{t('theory')}</small></div>
             {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove, locale).symbol}</span><strong>{analysisCounts[label]}</strong><small>{t(label)}</small></div>)}
           </div>
         </section>
@@ -1648,7 +1569,7 @@ function App() {
         <header className="review-header">
           <button className="icon-button" onClick={cancelAnalysis} aria-label={t('closeReview')}>×</button>
           <div><strong>{t('gameReview')}</strong><small>{t('localEngine')}</small></div>
-          <span className="evaluation-number">{analysedMove ? visibleEvaluation === null ? '—' : evaluationLabel(visibleEvaluation) : '…'}</span>
+          <span className="evaluation-number">{analysedMove ? visibleEvaluation === null ? variationEvaluationFailed ? '—' : '…' : evaluationLabel(visibleEvaluation) : '…'}</span>
         </header>
 
         {analysisBusy && (
@@ -1664,12 +1585,13 @@ function App() {
         {!analysisBusy && analysedMove && (
           <>
             <section className="review-commentary" aria-live="polite">
+              {analysisIndex < 0 ? <><h2>{t('initialPosition')}</h2><p>{t('initialPositionDetail')}</p></> : <>
               <div className="review-title">
-                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? `📖 ${t('theory')}` : `${badgeForAnalysis(analysedMove, locale).symbol} ${t(analysedMove.label)}`}</span>
+                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? <><MoveIcon symbol="📖" /> {t('theory')}</> : <><MoveIcon symbol={badgeForAnalysis(analysedMove, locale).symbol} /> {t(analysedMove.label)}</>}</span>
                 <strong>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</strong>
               </div>
               <p><b>{analysisOpeningName}.</b> {analysedMove.bookMove
-                ? t('bookMove')
+                ? analysedMove.openingExplanation || t('bookMove')
                 : analysedMove.cpLoss <= 10
                 ? t('keepsEvaluation')
                 : t('lostPawns', { amount: (analysedMove.cpLoss / 100).toFixed(1) })}</p>
@@ -1679,7 +1601,8 @@ function App() {
                   <p><b>{t('bestLine')}</b> {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</p>
                 </div>
               )}
-              {analysedMove.principalVariationUci.length > 0 && (variationPly === null
+              </>}
+              {analysisIndex >= 0 && analysedMove.principalVariationUci.length > 0 && (variationPly === null
                 ? <button className="line-toggle" onClick={() => stepVariation(0)}>{t('replayLine')} →</button>
                 : <div className="line-controls"><button onClick={() => stepVariation(variationPly - 1)} disabled={variationPly === 0} aria-label={t('previousLine')}>‹</button><span>{variationPly === 0 ? t('lineStart') : `${t('lineStep', { current: variationPly, total: analysedMove.principalVariationUci.length })} · ${analysedMove.principalVariationSan[variationPly - 1]}`}</span><button onClick={() => stepVariation(variationPly + 1)} disabled={variationPly >= analysedMove.principalVariationUci.length} aria-label={t('nextLine')}>›</button><button className="line-exit" onClick={() => setVariationPly(null)}>{t('exitLine')}</button></div>)}
               {analysisOpeningNote && <p className="opening-note">♟ {analysisOpeningNote}</p>}
@@ -1687,10 +1610,10 @@ function App() {
 
             <div className="material-row analysis-material opponent-material">
               <span>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })} · {colorName(playerSide === 'w' ? 'b' : 'w')}</span>
-              <b>{opponentCaptured.pieces.join(' ') || '—'} {opponentMaterialAdvantage > 0 ? `+${opponentMaterialAdvantage}` : ''}</b>
+              <CapturedPieces locale={locale} pieces={opponentCaptured.pieces} advantage={opponentMaterialAdvantage} />
             </div>
             <section className="review-board-row">
-              <div className={`evaluation-bar ${playerSide === 'b' ? 'black-orientation' : ''}`} aria-label={visibleEvaluation === null ? t('evaluationUnavailable') : t('positionEvaluation', { value: evaluationLabel(visibleEvaluation) })}>
+              <div className={`evaluation-bar ${visibleEvaluation === null ? 'evaluation-pending' : ''} ${playerSide === 'b' ? 'black-orientation' : ''}`} aria-label={visibleEvaluation === null ? t(variationEvaluationFailed ? 'evaluationUnavailable' : 'evaluationWorking') : t('positionEvaluation', { value: evaluationLabel(visibleEvaluation) })}>
                 {playerSide === 'w' ? <>
                   <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
                   <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
@@ -1698,7 +1621,7 @@ function App() {
                   <span className="eval-light" style={{ height: `${evaluationWhite}%` }} />
                   <span className="eval-dark" style={{ height: `${100 - evaluationWhite}%` }} />
                 </>}
-                <b>{visibleEvaluation === null ? '—' : evaluationLabel(visibleEvaluation)}</b>
+                <b>{visibleEvaluation === null ? variationEvaluationFailed ? '—' : '…' : evaluationLabel(visibleEvaluation)}</b>
               </div>
               <div className="board-wrap review-board" aria-label={t('analysisBoard')}>
                 <Chessboard options={{
@@ -1713,19 +1636,18 @@ function App() {
                   allowDrawingArrows: false,
                   canDragPiece: () => false,
                 }} />
-                {displayedBadge && <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} aria-label={displayedBadge.label}>{displayedBadge.symbol}</div>}
-                {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label={t('kingLost')}>×</div>}
-                {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label={t('kingWon')}>♛</div>}
+                {displayedBadge && <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} aria-label={displayedBadge.label}><MoveIcon symbol={displayedBadge.symbol} /></div>}
+                {resultBadges}
               </div>
             </section>
 
             <div className="material-row analysis-material">
               <span>{t('youColor', { color: colorName(playerSide) })}</span>
-              <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
+              <CapturedPieces locale={locale} pieces={playerCaptured.pieces} advantage={playerMaterialAdvantage} />
             </div>
 
             <nav className="review-controls" aria-label={t('moveNavigation')}>
-              <button onClick={() => selectAnalysisMove(Math.max(0, analysisIndex - 1))} disabled={analysisIndex === 0} aria-label={t('previousMove')}>‹</button>
+              <button onClick={() => selectAnalysisMove(Math.max(-1, analysisIndex - 1))} disabled={analysisIndex < 0} aria-label={t('previousMove')}>‹</button>
               <div className="review-moves" ref={reviewMovesRef}>
                 {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => selectAnalysisMove(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
               </div>
@@ -1786,7 +1708,7 @@ function App() {
 
       <div className="material-row opponent-material" aria-label={t('opponentMaterial')}>
         <span>Stockfish · {colorName(playerSide === 'w' ? 'b' : 'w')}</span>
-        <b>{opponentCaptured.pieces.join(' ') || '—'} {opponentMaterialAdvantage > 0 ? `+${opponentMaterialAdvantage}` : ''}</b>
+        <CapturedPieces locale={locale} pieces={opponentCaptured.pieces} advantage={opponentMaterialAdvantage} />
       </div>
 
       <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label={t('board')}>
@@ -1802,28 +1724,25 @@ function App() {
           animationDurationInMs: 120,
           allowDrawingArrows: false,
           canDragPiece: ({ piece }) => {
-            return !window.matchMedia('(pointer: coarse)').matches && !analysisOpen && !thinking && !gameFinished && (screen !== 'rating' || ratingStage === 'playing') && game.current.turn() === playerSide && piece.pieceType.startsWith(playerSide)
+            return !window.matchMedia('(pointer: coarse)').matches && !promotion && !analysisOpen && !thinking && !gameFinished && (screen !== 'rating' || ratingStage === 'playing') && game.current.turn() === playerSide && piece.pieceType.startsWith(playerSide)
           },
           onPieceDrop: ({ sourceSquare, targetSquare }) => {
             lastDropAt.current = Date.now()
             return Boolean(targetSquare && playUserMove(sourceSquare as Square, targetSquare as Square))
           },
-          onSquareClick: ({ square }) => chooseSquare(square as Square),
+          onSquareClick: ({ square }) => { if (!promotion) chooseSquare(square as Square) },
         }} />
         {displayedBadge && (
           <div className={`move-badge ${displayedBadge.tone}`} style={badgePosition(displayedBadge.square, playerSide)} title={displayedBadge.label} aria-label={displayedBadge.label}>
-            {displayedBadge.tone === 'theory'
-              ? '📖'
-              : displayedBadge.symbol}
+            <MoveIcon symbol={displayedBadge.symbol} />
           </div>
         )}
-        {mateLoserSquare && <div className="king-result-badge loss" style={badgePosition(mateLoserSquare, playerSide)} aria-label={t('kingLost')}>×</div>}
-        {mateWinnerSquare && <div className="king-result-badge win" style={badgePosition(mateWinnerSquare, playerSide)} aria-label={t('kingWon')}>♛</div>}
+        {resultBadges}
       </section>
 
       <div className="material-row player-material" aria-label={t('yourMaterial')}>
         <span>{t('youColor', { color: colorName(playerSide) })}</span>
-        <b>{playerCaptured.pieces.join(' ') || '—'} {playerMaterialAdvantage > 0 ? `+${playerMaterialAdvantage}` : ''}</b>
+        <CapturedPieces locale={locale} pieces={playerCaptured.pieces} advantage={playerMaterialAdvantage} />
       </div>
 
       <section className="game-controls">
@@ -1856,6 +1775,8 @@ function App() {
           <button className="primary" onClick={() => startRating('w')}>{t('ratingRepeat')} <span>→</span></button>
         </section>
       )}
+
+      {promotion && <dialog ref={promotionDialog} className="promotion-dialog" aria-labelledby="promotion-title" onCancel={() => setPromotion(null)}><h2 id="promotion-title">{t('promotionTitle')}</h2><div>{(['q', 'r', 'b', 'n'] as const).map((piece) => <button key={piece} autoFocus={piece === 'q'} onClick={() => playUserMove(promotion.from, promotion.to, piece)}><PieceIcon type={piece} color={playerSide} />{t(({ q: 'queen', r: 'rook', b: 'bishop', n: 'knight' } as const)[piece])}</button>)}</div><button className="promotion-cancel" onClick={() => setPromotion(null)}>{t('close')}</button></dialog>}
 
       {gameFinished && !analysisOpen && gameHistory.current.length > 0 && (
         <button className="primary analysis-start" onClick={() => void analyseGame()}>{t('analyseWholeGame')} <span>→</span></button>

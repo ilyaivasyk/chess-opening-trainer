@@ -1,8 +1,8 @@
 const CACHE_PREFIX = 'debut-offline-'
-const RELEASE = 'v23'
+const RELEASE = 'v32'
 const CACHE = `${CACHE_PREFIX}${RELEASE}`
 const CORE = [
-  './privacy.html', './manifest.webmanifest?v=23',
+  './privacy.html', './manifest.webmanifest?v=29',
   './icon-192-v4.png', './icon-512-v4.png', './apple-touch-icon-v4.png',
   './stockfish/stockfish-19-lite-single.js',
   './stockfish/stockfish-19-lite-single.wasm',

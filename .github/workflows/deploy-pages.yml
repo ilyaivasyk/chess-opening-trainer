@@ -27,7 +27,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node scripts/check-catalog.mjs
+      - run: node scripts/test-pwa.mjs
+      - run: node scripts/test-review.mjs
       - run: npm run build
+      - run: node scripts/verify-no-premium-web.mjs dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -35,4 +39,3 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-

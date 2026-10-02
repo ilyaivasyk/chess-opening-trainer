@@ -4,6 +4,7 @@ import { Chessboard } from 'react-chessboard'
 import { courses, getCatalog, getCourses, type Course, type Locale } from './data/courses'
 import { StockfishEngine, type EngineStrength } from './stockfish'
 import { getPremiumCourses, getPremiumProducts, getPremiumStatus, isNativeIOS, onPremiumStatusChange, purchasePremium, restorePurchases, type PremiumProduct } from './native/purchases'
+import { applyPwaUpdate, getPwaStatus, onPwaStatusChange } from './pwa'
 
 type Mode = 'coach' | 'practice' | 'exam'
 type Screen = 'home' | 'theory' | 'train' | 'rating'
@@ -215,6 +216,16 @@ const ui = {
   trainingDetail: { uk: 'Підказки, практика та іспит', en: 'Hints, practice, and exam' },
   chooseOpening: { uk: 'Обери дебют', en: 'Choose an opening' },
   catalogCount: { uk: '{free} безкоштовно · {total} у каталозі', en: '{free} free · {total} in the catalog' },
+  openingList: { uk: 'Список дебютів — прокрути, щоб побачити інші', en: 'Opening list — scroll for more' },
+  comingSoon: { uk: 'Скоро', en: 'Soon' },
+  pwaLessonPending: { uk: 'Цей курс готується. У вебверсії зараз доступні 11 безкоштовних курсів.', en: 'This course is in preparation. The web app currently includes 11 free courses.' },
+  pwaBeta: { uk: 'Тестова версія · аналіз партій зараз безкоштовний', en: 'Test version · game review is currently free' },
+  offlinePending: { uk: 'Зберігаємо застосунок для роботи без інтернету…', en: 'Saving the app for offline use…' },
+  offlineReady: { uk: 'Готово до роботи без інтернету', en: 'Ready to use offline' },
+  offlineFailed: { uk: 'Не вдалося зберегти застосунок офлайн. Підключись до інтернету та спробуй ще раз.', en: 'Could not save the app offline. Connect to the internet and try again.' },
+  updateReady: { uk: 'Доступне оновлення застосунку', en: 'An app update is available' },
+  updateApp: { uk: 'Оновити', en: 'Update' },
+  retry: { uk: 'Спробувати ще раз', en: 'Try again' },
   all: { uk: 'Усі', en: 'All' },
   playWhiteFilter: { uk: 'За білих', en: 'As White' },
   playBlackFilter: { uk: 'За чорних', en: 'As Black' },
@@ -612,6 +623,7 @@ function App() {
   const [products, setProducts] = useState<PremiumProduct[]>([])
   const [paywallOpen, setPaywallOpen] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [pwaStatus, setPwaStatus] = useState(getPwaStatus)
   const [purchaseBusy, setPurchaseBusy] = useState(false)
   const [purchaseMessage, setPurchaseMessage] = useState('')
   const [category, setCategory] = useState<Category>('beginner')
@@ -649,6 +661,8 @@ function App() {
   const [ratingResult, setRatingResult] = useState<RatingResult | null>(null)
   const [playerColor, setPlayerColor] = useState<PlayerColor>('w')
   const [ratingStage, setRatingStage] = useState<RatingStage>('playing')
+  const nativeIOS = isNativeIOS()
+  const canReview = !nativeIOS || premium
   const t = (key: UiKey, values?: Record<string, string | number>) => translate(locale, key, values)
   const colorName = (color: PlayerColor) => t(color === 'w' ? 'white' : 'black')
   const savedRating = readJson<RatingResult | null>(ratingKey, null)
@@ -729,6 +743,8 @@ function App() {
     engine.current = new StockfishEngine()
     return () => engine.current?.destroy()
   }, [])
+
+  useEffect(() => onPwaStatusChange(setPwaStatus), [])
 
   useEffect(() => {
     document.documentElement.lang = locale
@@ -974,7 +990,7 @@ function App() {
 
   async function beginFromMenu() {
     if (selectedEntry.access === 'premium' && !premium) {
-      setPaywallOpen(true)
+      if (nativeIOS) setPaywallOpen(true)
       return
     }
     let course = availableCourses.find((item) => item.id === selectedEntry.id)
@@ -1342,7 +1358,7 @@ function App() {
   }
 
   async function analyseGame() {
-    if (!premium) { setPaywallOpen(true); return }
+    if (!canReview) { setPaywallOpen(true); return }
     const records = [...gameHistory.current]
     if (!records.length || analysisBusy) return
     const session = gameSession.current
@@ -1456,6 +1472,8 @@ function App() {
 
         {languagePicker}
 
+        {!nativeIOS && import.meta.env.PROD && <div className="pwa-status" role="status"><span>{t(pwaStatus === 'pending' ? 'offlinePending' : pwaStatus === 'ready' ? 'offlineReady' : pwaStatus === 'update' ? 'updateReady' : 'offlineFailed')}</span>{(pwaStatus === 'update' || pwaStatus === 'error') && <button onClick={() => void applyPwaUpdate()}>{t(pwaStatus === 'update' ? 'updateApp' : 'retry')}</button>}</div>}
+
         <section className="play-menu">
           <button className="play-card rating-play" onClick={() => startRating('w')}>
             <span className="play-icon">♟</span>
@@ -1487,12 +1505,12 @@ function App() {
               if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
             }} key={id}>{t(label)}</button>)}
           </div>
-          <div className="opening-list">
+          <div key={category} className="opening-list" role="region" tabIndex={0} aria-label={t('openingList')}>
             {visibleCourses.map((course, index) => (
               <button className={`opening-card ${selectedEntry.id === course.id ? 'active' : ''} ${course.access === 'premium' && !premium ? 'locked' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
                 <span className="opening-number">{String(index + 1).padStart(2, '0')}</span>
                 <span className="opening-copy"><strong>{course.name}</strong><small>{course.eco} · {t('bothColors')}</small></span>
-                <span className={`opening-tag ${course.access === 'premium' && !premium ? 'premium-tag' : ''}`}>{course.access === 'premium' && !premium ? '♛ Pro' : t('available')}</span>
+                <span className={`opening-tag ${course.access === 'premium' && !premium ? 'premium-tag' : ''}`}>{course.access === 'premium' && !premium ? nativeIOS ? '♛ Pro' : t('comingSoon') : t('available')}</span>
               </button>
             ))}
           </div>
@@ -1500,7 +1518,7 @@ function App() {
             {colorFilter !== 'black' && <button aria-pressed={trainingColor === 'w'} className={trainingColor === 'w' ? 'active' : ''} onClick={() => { setTrainingColor('w'); setColorFilter('white') }}><span>♙</span><strong>{t('playWhite')}</strong><small>{t('whitePlan')}</small></button>}
             {colorFilter !== 'white' && <button aria-pressed={trainingColor === 'b'} className={trainingColor === 'b' ? 'active' : ''} onClick={() => { setTrainingColor('b'); setColorFilter('black') }}><span>♟</span><strong>{t('playBlack')}</strong><small>{t('blackPlan')}</small></button>}
           </div>
-          {selectedEntry.access === 'premium' && !selectedLesson ? <div className="locked-preview"><strong>♛ {selectedEntry.name}</strong><span>{selectedEntry.eco} · {premium ? t('lessonLoading') : t('premiumLesson')}</span><a href={selectedEntry.source} target="_blank" rel="noopener noreferrer">{t('openingSource')} ↗</a>{!premium && <button onClick={() => setPaywallOpen(true)}>{t('viewSubscription')} →</button>}</div> : <div className="variant-filter">
+          {selectedEntry.access === 'premium' && !selectedLesson ? <div className="locked-preview"><strong>{selectedEntry.name}</strong><span>{selectedEntry.eco} · {premium ? t('lessonLoading') : t(nativeIOS ? 'premiumLesson' : 'pwaLessonPending')}</span><a href={selectedEntry.source} target="_blank" rel="noopener noreferrer">{t('openingSource')} ↗</a>{nativeIOS && !premium && <button onClick={() => setPaywallOpen(true)}>{t('viewSubscription')} →</button>}</div> : <div className="variant-filter">
               <div><strong>{t('variation', { name: selectedEntry.name })}</strong><small>{t('variantsAvailable', { count: selectedCourse.variants.length - 1 })}</small></div>
               <div className="variant-options">
                 {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.id === 'all' ? t('randomVariation', { count: selectedCourse.variants.length - 1 }) : item.name}</button>)}
@@ -1538,8 +1556,9 @@ function App() {
           </div>
         </section>
 
-        <button className="primary" onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !premium ? 'unlockPro' : 'startTraining')} <span>→</span></button>
-        {!isNativeIOS() && <p className="install-note">{t('installIphone')}</p>}
+        <button className="primary" disabled={!nativeIOS && !selectedLesson} onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !premium ? nativeIOS ? 'unlockPro' : 'comingSoon' : 'startTraining')} <span>→</span></button>
+        {!nativeIOS && <><p className="install-note">{t('pwaBeta')}</p><p className="install-note">{t('installIphone')}</p></>}
+        <button className="privacy-link" onClick={() => setPrivacyOpen(true)}>{t('privacyPolicy')}</button>
       </main>
     )
   }

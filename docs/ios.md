@@ -1,5 +1,7 @@
 # iOS build and subscription handoff
 
+**Current scope (2 October 2026): PWA first.** Xcode installation and native verification are deferred at the user's request. See `docs/pwa.md` for current access, offline/update behavior and the later transfer boundary. Keep the iOS project available; do not describe it as ready for TestFlight until it has been compiled and tested.
+
 The iOS app is a Capacitor 8 shell around the local Vite build. It includes the web UI, chess engine files, and a native StoreKit 2 bridge. Its bundle ID is `com.ilyaivasyk.debut`; iOS 15 or later is the deployment target. The web service worker is disabled in the native shell, so its packaged assets are the offline source.
 
 The Home Screen name is localized by `en.lproj/InfoPlist.strings` (`Debut`) and `uk.lproj/InfoPlist.strings` (`Дебют`). The launch storyboard contains only artwork, with no text to translate. App Store name, subtitle, and description are separate App Store Connect metadata; create and review English and Ukrainian versions there before distribution. The `InfoPlist.strings` files do not localize the App Store listing.

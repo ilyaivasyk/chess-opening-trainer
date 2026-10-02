@@ -1,4 +1,15 @@
-Stockfish 19 WebAssembly build
-Source package: https://www.npmjs.com/package/stockfish
-Upstream source: https://github.com/nmrugg/stockfish.js
-License: GNU General Public License v3 (see Copying.txt)
+Stockfish.js 19 lite single-thread WebAssembly build
+
+Copyright (c) 2026 Chess.com, LLC, and Stockfish contributors.
+License: GNU General Public License version 3; see Copying.txt.
+
+Exact npm package: stockfish@19.0.0
+Package archive integrity (from package-lock.json):
+sha512-jDyYLbqNpboQcMs5HodTHI2CrKL74zkQWb1+sgoNXw5HI6avTblW4G0X7afFt3BBOc6VbTSkOV64EUxm/DWSpg==
+Corresponding source: https://github.com/nmrugg/stockfish.js/tree/54fde71d90c7c403964f6cacef48f7bbec495df1
+Upstream build target: npm run build-single-lite (Emscripten toolchain required).
+Underlying Stockfish source is included in that revision; its commit message identifies official-stockfish/Stockfish@edb0d9d with lite changes from sscg13/f5e5c633dd0c9c0efd1d1266f441ea5929b043c1.
+
+Bundled files are byte-identical to node_modules/stockfish/bin/ from that npm package:
+stockfish-19-lite-single.js   SHA-256 d3344124ab067fb0b90ee77873bb8e9fbf5fc01bc525fe714b0f942581e889e6
+stockfish-19-lite-single.wasm SHA-256 57ac2d72312aba346760e3f173f687a8c211208e97a87268436f7f0e10bb5387

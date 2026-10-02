@@ -1,6 +1,10 @@
 # Дебют
 
-Офлайн-тренер шахових дебютів українською мовою. Працює як застосунок на iPhone після додавання з Safari на початковий екран.
+Офлайн-тренер шахових дебютів українською та англійською мовами. Основний формат зараз — PWA: на iPhone додай його з Safari на початковий екран. Мова змінюється в меню й зберігається для наступного запуску.
+
+Публічна тестова збірка містить 11 безкоштовних курсів для обох кольорів та безкоштовний аналіз завершених партій. Каталог містить 61 назву; решта 50 курсів позначені «Скоро», їхні приватні тексти не публікуються у вебзбірці. Повне покриття популярних гілок і пасток ще не завершене.
+
+Дивись [перевірку та оновлення PWA](docs/pwa.md). Підготовлений [Capacitor iOS-проєкт](docs/ios.md) збережено для наступного етапу. Зараз Xcode та Apple Developer акаунт не потрібні для роботи над PWA; нативна збірка й покупки ще не перевірені.
 
 ## Розробка
 
@@ -14,4 +18,11 @@ npm run dev
 ```bash
 npm run build
 npm run check:course
+node scripts/check-catalog.mjs
+node scripts/test-pwa.mjs
+node scripts/test-review.mjs
+node scripts/test-analysis-engine.mjs
+node scripts/test-game-analysis.mjs
+node scripts/test-review-context.mjs
+node scripts/verify-no-premium-web.mjs dist
 ```

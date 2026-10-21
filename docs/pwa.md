@@ -56,7 +56,7 @@ When the owner chooses to proceed, restore the private content file and follow `
 
 ## Private owner preview
 
-`npm run build:owner-preview` builds `dist-owner-preview/` with all 63 prepared courses available, including the 52 private introductory courses. It requires the ignored `src/data/native-premium.json` asset. Serve with `npm run preview -- --outDir dist-owner-preview --port 4181`. This is an explicit build-time mode, not a browser flag or payment bypass. It uses the `v50-owner` release and its own scope/mode cache namespace.
+`npm run build:owner-preview` builds `dist-owner-preview/` with all 63 prepared courses available, including the 52 private introductory courses. It requires the ignored `src/data/native-premium.json` asset. Serve with `npm run preview -- --outDir dist-owner-preview --port 4181`. This is an explicit build-time mode, not a browser flag or payment bypass. It uses the `v51-owner` release and its own scope/mode cache namespace.
 
 Do not publish this directory or change the public Pages workflow without approval to make test lesson content public. A local HTTP preview is not an installable offline iPhone PWA over Wi-Fi; phone installation requires an HTTPS host. Publication permission is pending because the earlier scope required private paid content to stay out of the public web bundle.
 

@@ -92,11 +92,11 @@ export const freeCourseIds = [
 
 const freeIds = new Set<string>(freeCourseIds)
 
-export function getCatalog(locale: Locale): CourseCatalogEntry[] {
-  return rows.map(([id, category, eco, uk, en]) => ({
+export function getCatalog(locale: Locale, allAvailable = false): CourseCatalogEntry[] {
+  return rows.map(([id, category, eco, uk, en]): CourseCatalogEntry => ({
     id, category, eco,
     name: locale === 'en' ? en : uk,
     access: freeIds.has(id) ? 'free' : 'premium',
     source: `https://github.com/lichess-org/chess-openings/blob/master/${eco[0].toLowerCase()}.tsv`,
-  }))
+  })).sort((a, b) => Number(a.access !== 'free' && !allAvailable) - Number(b.access !== 'free' && !allAvailable))
 }

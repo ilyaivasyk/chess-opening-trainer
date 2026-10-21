@@ -596,7 +596,7 @@ function App() {
   const localizedCourses = useMemo(() => getCourses(locale), [locale])
   const availableCourses = useMemo(() => [...localizedCourses, ...(previewCourses?.[locale] ?? premiumCourses)], [localizedCourses, locale, premiumCourses])
   const catalogUnlocked = premium || previewCourses !== null
-  const catalog = getCatalog(locale)
+  const catalog = getCatalog(locale, catalogUnlocked)
   const selectedEntry = catalog.find((course) => course.id === selectedCourseId) ?? catalog[0]
   const selectedLesson = availableCourses.find((course) => course.id === selectedCourseId)
   const selectedCourse = selectedLesson ?? localizedCourses[0]

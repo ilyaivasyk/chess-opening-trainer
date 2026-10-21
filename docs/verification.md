@@ -2,7 +2,15 @@
 
 The current target is a PWA test build. Xcode installation and native verification are deferred at the user's request. This is **not a verified TestFlight build**.
 
-## Current PWA publication checkpoint — 21 October 2026 (v50)
+## Current catalog checkpoint — 21 October 2026 (v51)
+
+- Public course lists now put playable entries before Soon previews, retaining the existing order within each group. The same catalog order determines the first course selected after a level/filter change. Unlocked owner/native catalogs retain their source order. No lesson, analysis or interface wording changed.
+- Catalog-order regression checks both languages, all three levels, the unconventional filter, stable grouping, initial selections and unlocked catalogs. Catalog legality, PWA lifecycle, public build, runtime notices/hashes and all 104 private-summary exclusions pass.
+- The actual public production bundle served locally passed 36 combinations of language, level, unconventional filter and color filter at 414 × 896. Playable cards precede previews, first-card selection is consistent, document width stays within the viewport, and no page errors occurred. Temporary assertions/evidence: `/private/tmp/chess-catalog-order-check.py` and `/private/tmp/chess-v51-catalog-check/`. Publication and the installed-PWA upgrade are verified separately after deployment.
+
+Independent chess editorial review, physical iPhone/Safari testing, human Elo calibration and native/TestFlight acceptance remain open. Only the public `dist` is eligible for deployment.
+
+## Earlier PWA publication checkpoint — 21 October 2026 (v50)
 
 - Home now has separate level-assessment and opening-training actions. The catalog, variation, mode and opponent settings live on the opening-training screen. Back returns from theory/training to that screen; assessment returns Home. Existing Ukrainian/English wording and the new palette labels were reviewed with the pinned SEO content profile before application.
 - Three board palettes share one validated, persisted choice across training, assessment and review. Ready-made Chessnut pieces by Alexis Luengas (Apache-2.0) replace the previous board/capture/promotion figures. Pinned Lucide icons (ISC and inherited Feather MIT) replace custom navigation/result glyphs. All SVGs are bundled locally; exact upstream bytes, revisions, hashes and complete notices are retained and checked. No image generation or runtime icon CDN is used.

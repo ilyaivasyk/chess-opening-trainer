@@ -28,6 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/check-catalog.mjs
+      - run: node scripts/test-catalog-order.mjs
       - run: node scripts/test-pwa.mjs
       - run: node scripts/test-dropdown-position.mjs
       - run: node scripts/test-board-appearance.mjs

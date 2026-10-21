@@ -11,14 +11,15 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-v4.png" />
     <title>Дебют — шаховий тренер</title>
     <style>
-      #boot-splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #101514; color: #d9bd73; }
-      #boot-splash span { display: block; font: 76px/1 Georgia, serif; transform-origin: 50% 80%; animation: boot-knight 900ms ease-in-out infinite alternate; }
-      @keyframes boot-knight { from { transform: translateY(5px) rotate(-6deg); opacity: .7; } to { transform: translateY(-7px) rotate(6deg); opacity: 1; } }
+      #boot-splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: #101514; }
+      #boot-splash img { display: block; width: 96px; height: 96px; border-radius: 24px; }
+      #boot-splash span { width: 28px; height: 28px; border: 3px solid #d9bd7333; border-top-color: #d9bd73; border-radius: 50%; animation: boot-spin 900ms linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { #boot-splash span { animation: none; } }
     </style>
   </head>
   <body>
-    <div id="boot-splash" aria-hidden="true"><span>♞</span></div>
+    <div id="boot-splash" aria-hidden="true"><img src="./icon-512-v4.png" width="96" height="96" alt="" /><span></span></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

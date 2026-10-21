@@ -1528,7 +1528,7 @@ function App() {
       <main className={`shell ${screen === 'home' ? 'home' : 'openings-menu'}`}>
         {screen === 'home' ? <>
           <header className="game-hero">
-            <div className="brand-mark"><PieceIcon type="n" color="w" /></div>
+            <img className="brand-mark" src={`${import.meta.env.BASE_URL}icon-192-v4.png`} width="52" height="52" alt="" />
             <div><span className="eyebrow">{t('brand')}</span><h1>{t('debut')}</h1></div>
             <div className="rating-badge"><small>{t('level')}</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
           </header>

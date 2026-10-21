@@ -2,7 +2,16 @@
 
 The current target is a PWA test build. Xcode installation and native verification are deferred at the user's request. This is **not a verified TestFlight build**.
 
-## Current catalog checkpoint — 21 October 2026 (v51)
+## Current branding checkpoint — 21 October 2026 (v52)
+
+- Home now uses the actual installed app icon instead of a board knight. The loading screen uses the same existing app artwork with a separate CSS progress ring; the font-dependent knight and rocking animation are removed. No image generation, new icon dependency, manifest change or interface wording change was needed.
+- The Home brand label changes from 10px/800 to 12px/600 with restrained spacing. No text blur/filter was present in the source; this improves the small label's legibility without claiming a verified Safari rendering defect.
+- Public and owner builds, PWA lifecycle, board appearance/icons, runtime notices/hashes and all 104 private-summary exclusions pass. An independent code review found no necessary correction.
+- Actual production browser checks passed both splash motion preferences and immediate dismissal when the held application module was released, plus UK/EN Home at 320, 375, 414, 430 and landscape 812 CSS px. Existing app images loaded at their full source resolutions; brand text stayed inside its container; no horizontal page overflow or page errors occurred. Temporary evidence: `/private/tmp/chess-v52-brand-check/`. This is desktop Chromium at 2×, not physical Safari.
+
+Physical iPhone typography, touch, audio and accessibility remain unverified. Only public `dist` is published; the owner preview remains local.
+
+## Earlier catalog checkpoint — 21 October 2026 (v51)
 
 - Public course lists now put playable entries before Soon previews, retaining the existing order within each group. The same catalog order determines the first course selected after a level/filter change. Unlocked owner/native catalogs retain their source order. No lesson, analysis or interface wording changed.
 - Catalog-order regression checks both languages, all three levels, the unconventional filter, stable grouping, initial selections and unlocked catalogs. Catalog legality, PWA lifecycle, public build, runtime notices/hashes and all 104 private-summary exclusions pass.

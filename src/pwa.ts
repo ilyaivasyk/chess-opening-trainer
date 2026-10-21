@@ -11,7 +11,7 @@ let loadedReleaseOutdated = false
 let watchingLifecycle = false
 let preparedController: ServiceWorker | null = null
 let preparationFailed = false
-const RELEASE = import.meta.env.MODE === 'owner-preview' ? 'v51-owner' : 'v51'
+const RELEASE = import.meta.env.MODE === 'owner-preview' ? 'v52-owner' : 'v52'
 const listeners = new Set<(status: PwaStatus) => void>()
 
 export const getPwaStatus = () => status

@@ -1,4 +1,4 @@
-const RELEASE = 'v51'
+const RELEASE = 'v52'
 const CACHE_PREFIX = `debut-offline-${self.registration.scope}-${RELEASE.endsWith('-owner') ? 'owner' : 'public'}-`
 const CACHE = `${CACHE_PREFIX}${RELEASE}`
 const CORE = [

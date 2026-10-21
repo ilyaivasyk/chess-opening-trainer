@@ -12,12 +12,16 @@ import { buildTrainingReplies } from './training-replies'
 import { disposeChessSounds, getChessSoundsEnabled, setChessSoundsEnabled, playChessSound as playSound, unlockChessSounds } from './sounds'
 import { getDropdownPlacement } from './dropdown-position'
 import { BOARD_THEMES, getBoardTheme, type BoardTheme } from './board-appearance'
+import { createSavedGame, readGameHistory, saveGame, type GameDetails } from './game-history'
+import { GameHistoryView } from './game-history-view'
+import { PgnExport } from './pgn-export'
+import { historyUi } from './history-copy'
 
 declare const __PREVIEW_COURSES__: { uk: Course[]; en: Course[] } | null
 const previewCourses = typeof __PREVIEW_COURSES__ === 'undefined' ? null : __PREVIEW_COURSES__
 
 type Mode = 'coach' | 'practice' | 'exam'
-type Screen = 'home' | 'openings' | 'theory' | 'train' | 'rating'
+type Screen = 'home' | 'openings' | 'theory' | 'train' | 'rating' | 'history'
 type Category = 'beginner' | 'intermediate' | 'advanced'
 type ColorFilter = 'all' | 'white' | 'black'
 type VariantFilter = string
@@ -69,6 +73,7 @@ type Scenario = {
 }
 
 const ui = {
+  ...historyUi,
   brand: { uk: 'Шаховий тренер', en: 'Chess trainer' },
   debut: { uk: 'Дебют', en: 'Debut' },
   level: { uk: 'Рівень', en: 'Level' },
@@ -521,6 +526,12 @@ function graphPointColor(move: AnalysedMove) {
 
 function App() {
   const game = useRef(new Chess())
+  const savedGameDetails = useRef<GameDetails | null>(null)
+  const [currentPgn, setCurrentPgn] = useState('')
+  const [archive, setArchive] = useState(() => {
+    try { return { games: readGameHistory(), readError: false, saveError: false } }
+    catch { return { games: [], readError: true, saveError: false } }
+  })
   const engine = useRef<StockfishEngine | null>(null)
   const gameHistory = useRef<GameMoveRecord[]>([])
   const gameSession = useRef(0)
@@ -913,6 +924,7 @@ function App() {
     setPracticeCorrection(false)
     setPracticeDeviation(false)
     setManualOutcome(null)
+    setCurrentPgn('')
     setStrengthMenuOpen(false)
     setAnalysisOpen(false)
     setAnalysisSummaryOpen(false)
@@ -999,6 +1011,19 @@ function App() {
         : actor === 'course' && current?.opponentMove === uci ? current.opponentExplanation
         : actor === 'course' && activeScenario.initialMove === uci ? activeScenario.initialExplanation : undefined),
     })
+    saveCurrentGame()
+  }
+
+  function saveCurrentGame(outcome = savedGameDetails.current?.outcome ?? null) {
+    if (!savedGameDetails.current) return
+    savedGameDetails.current.outcome = outcome
+    try {
+      const saved = createSavedGame(game.current, savedGameDetails.current)
+      setCurrentPgn(saved.pgn)
+      setArchive({ games: saveGame(saved), readError: false, saveError: false })
+    } catch {
+      setArchive((previous) => ({ ...previous, saveError: true }))
+    }
   }
 
   function openingIdeaNote(beforeFen: string, afterFen: string, color: PlayerColor): GameMoveRecord['openingNote'] {
@@ -1032,6 +1057,7 @@ function App() {
     const selectedScenario = variantFilter === 'all' ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
     game.current.reset()
     resetGameState()
+    savedGameDetails.current = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), playerColor: trainingColor, courseId: course.id, mode, strength, outcome: null }
     setScenario(selectedScenario)
     setStep(0)
     setFen(game.current.fen())
@@ -1084,6 +1110,7 @@ function App() {
     if (color === 'w') localStorage.removeItem(samplesKey)
     game.current.reset()
     resetGameState()
+    savedGameDetails.current = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), playerColor: color, mode: 'rating', strength, outcome: null }
     setFen(game.current.fen())
     setRatingMoves([])
     setRatingResult(null)
@@ -1342,6 +1369,7 @@ function App() {
     if (mode !== 'practice' || !practiceDeviation || thinking) return
     game.current.undo()
     gameHistory.current.pop()
+    saveCurrentGame()
     setFen(game.current.fen())
     setLastMove(null)
     setMoveBadge(null)
@@ -1401,11 +1429,12 @@ function App() {
   }
 
   function rewindLesson() {
-    if (screen !== 'train' || mode === 'exam' || freePlay || thinking || step < 1) return
+    if (screen !== 'train' || gameFinished || mode === 'exam' || freePlay || thinking || step < 1) return
     gameSession.current += 1
     game.current.undo()
     game.current.undo()
     gameHistory.current.splice(-2)
+    saveCurrentGame()
     const previousStep = step - 1
     setStep(previousStep)
     setFen(game.current.fen())
@@ -1428,6 +1457,7 @@ function App() {
     setPracticeCorrection(false)
     setMoveBadge(null)
     setManualOutcome('resigned')
+    saveCurrentGame('resigned')
     playSound('defeat')
     setFeedback(t('resignedFeedback'))
   }
@@ -1448,6 +1478,7 @@ function App() {
         setPracticeCorrection(false)
         setMoveBadge(null)
         setManualOutcome('draw-agreed')
+        saveCurrentGame('draw-agreed')
         playSound('draw')
         setFeedback(t('drawAccepted'))
       } else {
@@ -1499,6 +1530,10 @@ function App() {
 
   const languagePicker = <div className="language-picker" role="group" aria-label="Language / Мова"><button className={locale === 'uk' ? 'active' : ''} onClick={() => void changeLocale('uk')} aria-pressed={locale === 'uk'}>Українська</button><button className={locale === 'en' ? 'active' : ''} onClick={() => void changeLocale('en')} aria-pressed={locale === 'en'}>English</button></div>
 
+  const pgnExport = <><PgnExport pgn={currentPgn} locale={locale} />{archive.saveError && <p className="history-warning" role="alert">{t('historySaveFailed')}</p>}</>
+
+  if (screen === 'history') return <GameHistoryView games={archive.games} locale={locale} boardColors={boardColors} storageError={archive.readError} onBack={() => setScreen('home')} />
+
   if (privacyOpen) {
     return <main className="privacy-screen"><header className="paywall-header"><button className="icon-button" onClick={() => setPrivacyOpen(false)} aria-label={t('back')}><UiIcon name="arrow-left" /></button><strong>{t('privacyPolicy')}</strong><span /></header><iframe title={t('privacyPolicy')} src={`${import.meta.env.BASE_URL}privacy.html#${locale}`} /></main>
   }
@@ -1535,6 +1570,8 @@ function App() {
 
           {languagePicker}
 
+          {archive.saveError && pgnExport}
+
           {!nativeIOS && import.meta.env.PROD && <div className="pwa-status" role="status"><span>{t(pwaStatus === 'pending' ? 'offlinePending' : pwaStatus === 'ready' ? 'offlineReady' : pwaStatus === 'update' ? 'updateReady' : 'offlineFailed')}</span>{(pwaStatus === 'update' || pwaStatus === 'error') && <button onClick={() => void applyPwaUpdate()}>{t(pwaStatus === 'update' ? 'updateApp' : 'retry')}</button>}</div>}
 
           <section className="play-menu">
@@ -1546,6 +1583,17 @@ function App() {
             <button className="play-card lesson-play" onClick={() => setScreen('openings')}>
               <span className="play-icon"><UiIcon name="graduation-cap" /></span>
               <span><strong>{t('openingTraining')}</strong><small>{t('trainingDetail')}</small></span>
+              <UiIcon name="arrow-right" />
+            </button>
+            <button className="play-card" onClick={() => {
+              try {
+                const games = readGameHistory()
+                setArchive((previous) => ({ ...previous, games, readError: false }))
+              } catch { setArchive((previous) => ({ ...previous, readError: true })) }
+              setScreen('history')
+            }}>
+              <span className="play-icon"><UiIcon name="book-open" /></span>
+              <span><strong>{t('gameHistory')}</strong><small>{t('historyDetail')}</small></span>
               <UiIcon name="arrow-right" />
             </button>
           </section>
@@ -1736,6 +1784,7 @@ function App() {
           </div>
         </section>
         <button className="primary report-review-button" onClick={() => setAnalysisSummaryOpen(false)}>{t('viewReview')} <span>→</span></button>
+        {pgnExport}
       </main>
     )
   }
@@ -1844,6 +1893,7 @@ function App() {
         )}
 
         {!analysisBusy && !analysedMove && <div className="analysis-failure" role="alert"><p>{analysisError || t('reviewUnavailable')}</p><button className="primary" onClick={() => void analyseGame()}>{t('tryReviewAgain')} →</button></div>}
+        {pgnExport}
       </main>
     )
   }
@@ -1851,7 +1901,7 @@ function App() {
   return (
       <main className="shell training">
       <header className="training-header">
-        <button className="icon-button" onClick={() => setScreen(screen === 'rating' ? 'home' : 'openings')} aria-label={t('back')}><UiIcon name="arrow-left" /></button>
+        <button className="icon-button" onClick={() => { cancelAnalysis(); setThinking(false); setScreen(screen === 'rating' ? 'home' : 'openings') }} aria-label={t('back')}><UiIcon name="arrow-left" /></button>
         <div><strong>{screen === 'rating' ? t('ratingGame') : selectedCourse.name}</strong><small>{screen === 'rating' ? t('againstStockfish', { level: strength === 3000 ? 'MAX' : strength }) : activeScenario.name}</small></div>
         <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : () => start()} aria-label={t('restart')}><UiIcon name="rotate-ccw" /></button>
         </header>
@@ -1944,9 +1994,11 @@ function App() {
         <span>{screen === 'rating' ? t('noHints') : freePlay ? (strength === 3000 ? 'MAX' : `≈ ${strength} Elo`) : `${step}/${activeScenario.steps.length}`}</span>
       </section>
 
+      {pgnExport}
+
       {engineFailure && !thinking && <button className="secondary engine-retry" onClick={retryFailedEngine}>{t(engineFailure === 'rating-evaluation' ? 'retryEvaluation' : 'retryEngine')} →</button>}
 
-      {screen === 'train' && !freePlay && mode !== 'exam' && step > 0 && !thinking && (
+      {screen === 'train' && !gameFinished && !freePlay && mode !== 'exam' && step > 0 && !thinking && (
         <button className="secondary lesson-back" onClick={rewindLesson}>← {t('rewindLesson')}</button>
       )}
 

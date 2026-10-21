@@ -2,7 +2,17 @@
 
 The current target is a PWA test build. Xcode installation and native verification are deferred at the user's request. This is **not a verified TestFlight build**.
 
-## Current branding checkpoint — 21 October 2026 (v52)
+## Current history/PGN checkpoint — 21 October 2026 (v53)
+
+- A new Home action opens device-local game history. Every accepted learner/course/engine move, voluntary undo and manual result updates the same saved game ID. Starting another game creates a new ID with fixed color, course, mode and opponent metadata. Leaving play cancels pending engine/course callbacks; finished lessons no longer permit rewinding their archived result.
+- Saved games have independent read-only replay from the initial position through every SAN move, first/previous/next/last controls and the original player's orientation. No archive replay mutates the live game. Copy PGN works during play, in the full report/review (including analysis failures), and in archive replay. A denied clipboard exposes the complete selectable text; no false success is shown. A storage write failure retains export of the latest played PGN and preserves previous storage.
+- `test-game-history.mjs` covers strict legal PGN round trips, Seven Tag headers, both colors, mate/resignation/agreed draw/repetition, FEN, promotion, header safety, stable IDs, external-tab changes, cache isolation, corrupt storage, quota failure and no silent truncation. PWA, board-icon, catalog-order and complete-game-analysis regressions pass. Both builds, runtime notice/hash checks and all 104 private-summary exclusions pass.
+- Actual browser play passed Practice deviation → voluntary undo → engine reply → resignation → MAX report/review → exact clipboard PGN → reload → saved replay. A separate assessment game retained its own ID after reload. Additional real UI checks passed cancellation before a pending course reply, Black lesson metadata/result, disabling rewind after resignation, quota-failure export and recovery. Exported real PGN also loaded with the strict chess.js parser. Evidence: `/private/tmp/chess-v53-live-history-check/` and `/private/tmp/chess-v53-boundaries-check/`.
+- Independent rendered history checks passed UK/EN at 320, 375, 414, 430 and short landscape viewports: every ply of castling/promotion/mate fixtures matched the expected board, Black orientation was correct, buttons were at least 44px, no horizontal overflow/page errors occurred, and denied clipboard/corrupt storage remained truthful. Evidence: `/private/tmp/chess-history-ui-check/`. UI wording and updated retention/privacy text were reviewed with the pinned SEO content profile before application; final rendered text was supplied for review.
+
+Physical iPhone/Safari, VoiceOver and native acceptance remain unverified. History is local to the app/browser, with no cloud sync or recovery of previously unsaved games. Stored games can be replayed/exported; engine analysis itself is not persisted and play cannot resume from history.
+
+## Earlier branding checkpoint — 21 October 2026 (v52)
 
 - Home now uses the actual installed app icon instead of a board knight. The loading screen uses the same existing app artwork with a separate CSS progress ring; the font-dependent knight and rocking animation are removed. No image generation, new icon dependency, manifest change or interface wording change was needed.
 - The Home brand label changes from 10px/800 to 12px/600 with restrained spacing. No text blur/filter was present in the source; this improves the small label's legibility without claiming a verified Safari rendering defect.

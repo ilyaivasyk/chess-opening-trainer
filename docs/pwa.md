@@ -10,6 +10,7 @@ Current target: a bilingual offline PWA. Do not install Xcode or buy an Apple De
 - Surprise replies work only in Practice and Exam during the opening, selecting another prepared legal reply at the same position. Coach hides the entire surprise-replies block and keeps the chosen line; free play uses the selected bot strength.
 - Opening lessons, both local engine JS/WASM distributions, artwork and bundled Kenney CC0 wood-click recordings run locally. No CDN or game server is required after the production app has finished saving its offline assets.
 - The language selector is in the main menu. The selected language applies to theory, game feedback and review. There is no course-progress system.
+- Home includes local Game history. Committed moves and results are saved after every move, undo and manual ending; unfinished games can also be replayed. Copy PGN is available during play, in review/report and in a saved replay. Clipboard denial exposes a selectable PGN field. Historical games are read-only and cannot be resumed.
 
 The private 52 courses are introductory material, not yet complete popular-branch and trap coverage. Keep their JSON in the separate private content repository. Do not put it into `public/`, import it into web code or unlock it with a local browser flag. A future paid web product needs its own payment and content-delivery design; StoreKit works only in the native app.
 
@@ -20,7 +21,7 @@ The private 52 courses are introductory material, not yet complete popular-branc
 3. For an update, reconnect and return to the menu. **Update** appears after the new release is downloaded. Tap it in the menu; it reloads the app. No update reload is triggered during a game.
 4. When moving from an older version without the update button, reopen its website online in Safari, or fully close the installed app and any old Safari tabs for this site, then reopen it.
 
-An update must be deployed first; editing files on a Mac does not change the installed PWA. Browser storage may be removed by the operating system or by clearing website data. If that happens, download again online. The current game and its review are held in memory and are lost on reload; language and approximate playing level are stored locally.
+An update must be deployed first; editing files on a Mac does not change the installed PWA. Browser storage may be removed by the operating system or by clearing website data. If that happens, download again online. Starting with v53, saved moves and game results survive reload in local Game history; active play and analysis remain in memory. History is not synced or backed up online. Export PGN to keep a separate copy; games played before history was introduced cannot be recovered after their old page closes.
 
 Starting with v37, cache names include the service-worker scope and the public/owner build mode. Activating one scope or mode preserves the other's offline assets. Legacy caches without a scope are retained because their owner cannot be determined; clearing website data removes them. Public and owner previews at the same URL still share one service-worker registration, so use separate URLs for simultaneous testing.
 
@@ -56,7 +57,7 @@ When the owner chooses to proceed, restore the private content file and follow `
 
 ## Private owner preview
 
-`npm run build:owner-preview` builds `dist-owner-preview/` with all 63 prepared courses available, including the 52 private introductory courses. It requires the ignored `src/data/native-premium.json` asset. Serve with `npm run preview -- --outDir dist-owner-preview --port 4181`. This is an explicit build-time mode, not a browser flag or payment bypass. It uses the `v52-owner` release and its own scope/mode cache namespace.
+`npm run build:owner-preview` builds `dist-owner-preview/` with all 63 prepared courses available, including the 52 private introductory courses. It requires the ignored `src/data/native-premium.json` asset. Serve with `npm run preview -- --outDir dist-owner-preview --port 4181`. This is an explicit build-time mode, not a browser flag or payment bypass. It uses the `v53-owner` release and its own scope/mode cache namespace.
 
 Do not publish this directory or change the public Pages workflow without approval to make test lesson content public. A local HTTP preview is not an installable offline iPhone PWA over Wi-Fi; phone installation requires an HTTPS host. Publication permission is pending because the earlier scope required private paid content to stay out of the public web bundle.
 

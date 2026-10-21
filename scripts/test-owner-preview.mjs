@@ -7,8 +7,8 @@ const scripts = (await Promise.all(assets.filter((name) => name.endsWith('.js'))
 for (const locale of ['uk', 'en']) for (const course of courses[locale]) {
   assert(scripts.includes(course.theory.summary), `${locale}/${course.id}: missing preview course`)
 }
-assert((await readFile('dist-owner-preview/sw.js','utf8')).includes("const RELEASE = 'v52-owner'"))
-assert((await readFile('dist/sw.js','utf8')).includes("const RELEASE = 'v52'"))
+assert((await readFile('dist-owner-preview/sw.js','utf8')).includes("const RELEASE = 'v53-owner'"))
+assert((await readFile('dist/sw.js','utf8')).includes("const RELEASE = 'v53'"))
 for (const directory of ['dist', 'dist-owner-preview']) {
   assert.equal(await readFile(`${directory}/THIRD_PARTY_LICENSES.txt`, 'utf8'), runtimeLicenses(), `${directory}: incomplete runtime notices`)
 }

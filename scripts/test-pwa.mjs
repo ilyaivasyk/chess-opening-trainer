@@ -14,7 +14,7 @@ class Events {
 }
 class Worker extends Events {
   state = 'installing'
-  release = 'v52'
+  release = 'v53'
   messages = []
   postMessage(message, ports = []) {
     this.messages.push(message)
@@ -142,7 +142,7 @@ const shell = '<link href="./assets/app.css"><script src="./assets/app.js"></scr
 function workerRuntime({ failAssets = false, scope = 'https://example.test/chess-opening-trainer/', owner = false, stores } = {}) {
   const events = new Map()
   const cachePrefix = `debut-offline-${scope}-${owner ? 'owner' : 'public'}-`
-  const cacheName = `${cachePrefix}${owner ? 'v52-owner' : 'v52'}`
+  const cacheName = `${cachePrefix}${owner ? 'v53-owner' : 'v53'}`
   const previousCacheName = `${cachePrefix}${owner ? 'v37-owner' : 'v37'}`
   stores ??= new Map([[previousCacheName, new Map()], ['debut-offline-v20', new Map()], ['another-app', new Map()]])
   const fetches = []
@@ -178,7 +178,7 @@ function workerRuntime({ failAssets = false, scope = 'https://example.test/chess
     clients: { claim: async () => { self.claimCalls += 1 } },
     addEventListener: (name, listener) => events.set(name, listener),
   }
-  vm.runInNewContext(owner ? workerCode.replace("const RELEASE = 'v52'", "const RELEASE = 'v52-owner'") : workerCode, { self, caches, URL, fetch: async (url) => { fetches.push(url); return new Response(shell) } })
+  vm.runInNewContext(owner ? workerCode.replace("const RELEASE = 'v53'", "const RELEASE = 'v53-owner'") : workerCode, { self, caches, URL, fetch: async (url) => { fetches.push(url); return new Response(shell) } })
   async function dispatch(name, fields = {}) {
     const promises = []
     let response
@@ -211,7 +211,7 @@ for (const name of ['worker.js', 'fairy-stockfish.js', 'fairy-stockfish.wasm', '
 assert.equal(installed.self.skipCalls, 0)
 let acknowledgedRelease
 await installed.dispatch('message', { data: 'GET_RELEASE', ports: [{ postMessage: ({ release }) => { acknowledgedRelease = release } }] })
-assert.equal(acknowledgedRelease, 'v52')
+assert.equal(acknowledgedRelease, 'v53')
 await installed.dispatch('message', { data: 'SKIP_WAITING' })
 assert.equal(installed.self.skipCalls, 1)
 await installed.dispatch('activate')

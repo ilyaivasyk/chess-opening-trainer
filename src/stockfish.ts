@@ -1,11 +1,17 @@
 import { Chess } from 'chess.js'
 
-export type EngineStrength = 800 | 1200 | 1600 | 1800 | 2000 | 3000
+// Both engines use their built-in CCRL Elo calibration; 3000 is unrestricted MAX.
+// Fairy-Stockfish's HCE engine supports the targets below Stockfish 19's 1320 minimum.
+export const ENGINE_STRENGTHS = [600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2400, 3000] as const
+export type EngineStrength = typeof ENGINE_STRENGTHS[number]
+export type EngineHistory = { initialFen: string; moves: string[] }
 
 export type EngineAnalysis = { bestMove: string | null; scoreCp: number; principalVariation: string[] }
 
 export class StockfishEngine {
-  private worker = new Worker(`${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`)
+  private worker: Worker
+  private lowStrengthEngine?: StockfishEngine
+  private delegatedSearch = false
   private ready: Promise<void>
   private rejectReady?: (error: Error) => void
   private readyTimer?: number
@@ -15,22 +21,32 @@ export class StockfishEngine {
   private searchTimer?: number
   private lines = new Map<string, { depth: number; scoreCp: number; principalVariation: string[] }>()
   private searchFen = ''
+  private searchPosition = ''
   private searchMoveTime = 300
   private requireExactScore = true
   private recoveredSearch = false
 
-  constructor() {
+  constructor(private readonly flavor: 'stockfish' | 'fairy' = 'stockfish') {
+    this.worker = new Worker(`${import.meta.env.BASE_URL}${flavor === 'fairy' ? 'fairy-stockfish/worker.js' : 'stockfish/stockfish-19-lite-single.js'}`)
     this.ready = new Promise((resolve, reject) => {
       this.rejectReady = reject
-      this.readyTimer = window.setTimeout(() => reject(new Error('Stockfish did not start')), 12_000)
-      this.worker.onerror = () => {
+      this.readyTimer = window.setTimeout(() => {
+        reject(new Error('Stockfish did not start'))
+        this.destroy()
+      }, 12_000)
+      const failWorker = () => {
         window.clearTimeout(this.readyTimer)
         const error = new Error('Could not load Stockfish')
         reject(error)
         this.failSearch(error)
         this.destroy()
       }
+      this.worker.onerror = failWorker
       this.worker.onmessage = ({ data }) => {
+        if (data && typeof data === 'object' && 'error' in data) {
+          failWorker()
+          return
+        }
         if (this.destroyed || typeof data !== 'string') return
         for (const line of data.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
           if (line === 'uciok') {
@@ -78,7 +94,7 @@ export class StockfishEngine {
               if (!this.recoveredSearch) {
                 this.recoveredSearch = true
                 this.lines.clear()
-                this.worker.postMessage(`position fen ${this.searchFen}`)
+                this.worker.postMessage(this.searchPosition)
                 this.worker.postMessage(`go movetime ${Math.max(300, this.searchMoveTime)} searchmoves ${bestMove}`)
                 continue
               }
@@ -97,25 +113,45 @@ export class StockfishEngine {
     this.worker.postMessage('uci')
   }
 
-  async bestMove(fen: string, strength: EngineStrength): Promise<string | null> {
-    return (await this.search(fen, strength, strength >= 2000 ? 700 : 350, false)).bestMove
+  async bestMove(fen: string, strength: EngineStrength, history?: EngineHistory): Promise<string | null> {
+    return (await this.search(fen, strength, strength >= 2000 ? 700 : 350, false, history)).bestMove
   }
 
-  async analyse(fen: string, strength: EngineStrength = 3000, moveTime = 300): Promise<EngineAnalysis> {
-    return this.search(fen, strength, moveTime, true)
+  async analyse(fen: string, strength: EngineStrength = 3000, moveTime = 300, history?: EngineHistory): Promise<EngineAnalysis> {
+    return this.search(fen, strength, moveTime, true, history)
   }
 
-  private async search(fen: string, strength: EngineStrength, moveTime: number, requireExactScore: boolean): Promise<EngineAnalysis> {
+  private async search(fen: string, strength: EngineStrength, moveTime: number, requireExactScore: boolean, history?: EngineHistory): Promise<EngineAnalysis> {
     if (this.destroyed) throw new Error('Stockfish is stopped')
-    const position = new Chess(fen)
+    if (!ENGINE_STRENGTHS.includes(strength)) throw new Error('Unsupported Stockfish strength')
+    const position = new Chess(history?.initialFen ?? fen)
+    const initialFen = position.fen()
+    for (const uci of history?.moves ?? []) {
+      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci) || position.isGameOver()) throw new Error('Invalid engine move history')
+      position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })
+    }
+    if (history && position.fen() !== fen) throw new Error('Engine history does not match position')
+    const positionCommand = `position fen ${initialFen}${history?.moves.length ? ` moves ${history.moves.join(' ')}` : ''}`
     if (position.isCheckmate()) return { bestMove: null, scoreCp: -10_000, principalVariation: [] }
     if (position.isDraw()) return { bestMove: null, scoreCp: 0, principalVariation: [] }
+    if (this.flavor === 'stockfish' && strength <= 1200) {
+      if (this.resolveSearch || this.delegatedSearch) throw new Error('Stockfish is already searching')
+      this.delegatedSearch = true
+      try {
+        this.lowStrengthEngine ??= new StockfishEngine('fairy')
+        return await this.lowStrengthEngine.search(fen, strength, moveTime, requireExactScore, history)
+      } finally {
+        this.delegatedSearch = false
+        if (this.lowStrengthEngine?.destroyed) this.lowStrengthEngine = undefined
+      }
+    }
     await this.ready
     if (this.destroyed) throw new Error('Stockfish is stopped')
-    if (this.resolveSearch) throw new Error('Stockfish is already searching')
+    if (this.resolveSearch || this.delegatedSearch) throw new Error('Stockfish is already searching')
     this.configure(strength)
     this.lines.clear()
-    this.searchFen = fen
+    this.searchFen = position.fen()
+    this.searchPosition = positionCommand
     this.searchMoveTime = moveTime
     this.requireExactScore = requireExactScore
     this.recoveredSearch = false
@@ -130,7 +166,7 @@ export class StockfishEngine {
         this.destroy()
       }, 8_000)
     })
-    this.worker.postMessage(`position fen ${fen}`)
+    this.worker.postMessage(this.searchPosition)
     this.worker.postMessage(`go movetime ${moveTime}`)
     return result
   }
@@ -143,6 +179,7 @@ export class StockfishEngine {
   }
 
   destroy() {
+    if (this.destroyed) return
     this.destroyed = true
     window.clearTimeout(this.readyTimer)
     window.clearTimeout(this.searchTimer)
@@ -151,17 +188,13 @@ export class StockfishEngine {
     this.rejectSearch?.(new Error('Stockfish search was stopped'))
     this.resolveSearch = undefined
     this.rejectSearch = undefined
+    this.lowStrengthEngine?.destroy()
+    this.lowStrengthEngine = undefined
     this.worker.postMessage('quit')
     this.worker.terminate()
   }
 
   private configure(strength: EngineStrength) {
-    if (strength < 1600) {
-      this.worker.postMessage('setoption name UCI_LimitStrength value false')
-      this.worker.postMessage(`setoption name Skill Level value ${strength === 800 ? 0 : 4}`)
-      return
-    }
-
     if (strength === 3000) {
       this.worker.postMessage('setoption name UCI_LimitStrength value false')
       this.worker.postMessage('setoption name Skill Level value 20')

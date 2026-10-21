@@ -14,7 +14,7 @@ class Events {
 }
 class Worker extends Events {
   state = 'installing'
-  release = 'v32'
+  release = 'v50'
   messages = []
   postMessage(message, ports = []) {
     this.messages.push(message)
@@ -139,11 +139,14 @@ assert.equal(foreground.window.reloads, 1)
 
 const workerCode = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8')
 const shell = '<link href="./assets/app.css"><script src="./assets/app.js"></script>'
-function workerRuntime({ failAssets = false } = {}) {
+function workerRuntime({ failAssets = false, scope = 'https://example.test/chess-opening-trainer/', owner = false, stores } = {}) {
   const events = new Map()
-  const stores = new Map([['debut-offline-v20', new Map()], ['another-app', new Map()]])
+  const cachePrefix = `debut-offline-${scope}-${owner ? 'owner' : 'public'}-`
+  const cacheName = `${cachePrefix}${owner ? 'v50-owner' : 'v50'}`
+  const previousCacheName = `${cachePrefix}${owner ? 'v37-owner' : 'v37'}`
+  stores ??= new Map([[previousCacheName, new Map()], ['debut-offline-v20', new Map()], ['another-app', new Map()]])
   const fetches = []
-  const resolveKey = (key) => new URL(typeof key === 'string' ? key : key.url, 'https://example.test/chess-opening-trainer/sw.js').href
+  const resolveKey = (key) => new URL(typeof key === 'string' ? key : key.url, new URL('sw.js', scope)).href
   const caches = {
     keys: async () => [...stores.keys()],
     delete: async (key) => stores.delete(key),
@@ -168,13 +171,14 @@ function workerRuntime({ failAssets = false } = {}) {
     },
   }
   const self = {
-    location: new URL('https://example.test/chess-opening-trainer/sw.js'),
+    location: new URL('sw.js', scope),
+    registration: { scope },
     skipCalls: 0, claimCalls: 0,
     skipWaiting: async () => { self.skipCalls += 1 },
     clients: { claim: async () => { self.claimCalls += 1 } },
     addEventListener: (name, listener) => events.set(name, listener),
   }
-  vm.runInNewContext(workerCode, { self, caches, URL, fetch: async (url) => { fetches.push(url); return new Response(shell) } })
+  vm.runInNewContext(owner ? workerCode.replace("const RELEASE = 'v50'", "const RELEASE = 'v50-owner'") : workerCode, { self, caches, URL, fetch: async (url) => { fetches.push(url); return new Response(shell) } })
   async function dispatch(name, fields = {}) {
     const promises = []
     let response
@@ -183,27 +187,48 @@ function workerRuntime({ failAssets = false } = {}) {
     await Promise.all(promises)
     return result
   }
-  return { dispatch, stores, self, fetches, resolveKey }
+  return { dispatch, stores, self, fetches, resolveKey, cacheName, previousCacheName }
 }
 
 const installed = workerRuntime()
 await installed.dispatch('install')
 assert.equal(installed.fetches.length, 1, 'shell and asset manifest must come from the same fetch')
-const cache = installed.stores.get('debut-offline-v32')
+const cache = installed.stores.get(installed.cacheName)
 assert.equal(await cache.get(installed.resolveKey('./index.html')).response.clone().text(), shell)
 assert.equal(await cache.get(installed.resolveKey('./')).response.clone().text(), shell)
 assert.ok(cache.has(installed.resolveKey('./assets/app.js')))
 assert.ok(cache.has(installed.resolveKey('./stockfish/stockfish-19-lite-single.wasm')))
+assert.ok(cache.has(installed.resolveKey('./THIRD_PARTY_LICENSES.txt')), 'license notices must be available offline')
+assert.ok(cache.has(installed.resolveKey('./licenses/brilliant-chess.txt')), 'vendored classifier attribution must be available offline')
+for (const name of ['move.wav', 'capture.wav', 'SOURCE.txt', 'LICENSE.txt']) {
+  assert.ok(cache.has(installed.resolveKey(`./sounds/classic/${name}`)), `${name}: official sound and notice assets must be precached`)
+  assert.ok((await readFile(new URL(`../public/sounds/classic/${name}`, import.meta.url))).length, `${name}: precached sound asset must exist`)
+}
+for (const name of ['worker.js', 'fairy-stockfish.js', 'fairy-stockfish.wasm', 'SOURCE.txt', 'SOURCE.md', 'COPYING.txt', 'AUTHORS', 'fairy-source.tar.gz', 'single-worker.patch', 'browser_main.cpp', 'Makefile.browser']) {
+  assert.ok(cache.has(installed.resolveKey(`./fairy-stockfish/${name}`)), `${name}: opponent engine and complete corresponding source must be precached`)
+  assert.ok((await readFile(new URL(`../public/fairy-stockfish/${name}`, import.meta.url))).length, `${name}: precached opponent asset must exist`)
+}
 assert.equal(installed.self.skipCalls, 0)
 let acknowledgedRelease
 await installed.dispatch('message', { data: 'GET_RELEASE', ports: [{ postMessage: ({ release }) => { acknowledgedRelease = release } }] })
-assert.equal(acknowledgedRelease, 'v32')
+assert.equal(acknowledgedRelease, 'v50')
 await installed.dispatch('message', { data: 'SKIP_WAITING' })
 assert.equal(installed.self.skipCalls, 1)
 await installed.dispatch('activate')
 assert.equal(installed.self.claimCalls, 1)
-assert.ok(!installed.stores.has('debut-offline-v20'))
+assert.ok(!installed.stores.has(installed.previousCacheName), 'clean only the previous release of this scope and build mode')
+assert.ok(installed.stores.has('debut-offline-v20'), 'legacy caches have no provable scope owner')
 assert.ok(installed.stores.has('another-app'), 'do not delete another app\'s caches')
+const anotherScope = workerRuntime({ scope: 'https://example.test/another-training/', stores: installed.stores })
+await anotherScope.dispatch('install')
+await anotherScope.dispatch('activate')
+assert.ok(installed.stores.has(installed.cacheName), 'another scope must preserve this app\'s offline cache')
+const owner = workerRuntime({ owner: true, stores: installed.stores })
+await owner.dispatch('install')
+await owner.dispatch('activate')
+assert.ok(installed.stores.has(installed.cacheName), 'owner preview must preserve the public cache even at the same scope')
+assert.ok(installed.stores.has(anotherScope.cacheName), 'owner preview must preserve other scopes')
+assert.notEqual(owner.cacheName, installed.cacheName)
 const navigation = await installed.dispatch('fetch', { request: { url: 'https://example.test/chess-opening-trainer/?v=26', method: 'GET', mode: 'navigate' } })
 assert.equal(await navigation.text(), shell)
 const privacy = await installed.dispatch('fetch', { request: { url: 'https://example.test/chess-opening-trainer/privacy.html', method: 'GET', mode: 'navigate' } })
@@ -219,6 +244,6 @@ const rejected = workerRuntime({ failAssets: true })
 await assert.rejects(rejected.dispatch('install'), /download failed/)
 assert.equal(rejected.self.skipCalls, 0)
 assert.equal(rejected.self.claimCalls, 0)
-assert.ok(rejected.stores.has('debut-offline-v20'), 'failed installation must keep the old cache')
+assert.ok(rejected.stores.has(rejected.previousCacheName), 'failed installation must keep the old cache')
 
 console.log('✓ PWA readiness, manual updates, offline failure recovery, scoped cache and matching shell/assets')

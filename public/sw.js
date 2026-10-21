@@ -1,12 +1,21 @@
-const CACHE_PREFIX = 'debut-offline-'
-const RELEASE = 'v32'
+const RELEASE = 'v50'
+const CACHE_PREFIX = `debut-offline-${self.registration.scope}-${RELEASE.endsWith('-owner') ? 'owner' : 'public'}-`
 const CACHE = `${CACHE_PREFIX}${RELEASE}`
 const CORE = [
-  './privacy.html', './manifest.webmanifest?v=29',
+  './privacy.html', './THIRD_PARTY_LICENSES.txt', './licenses/brilliant-chess.txt', './manifest.webmanifest?v=29',
+  './licenses/chessnut.txt', './licenses/chessnut-copyright.txt', './licenses/lucide.txt', './licenses/feather.txt', './licenses/ready-icons-source.json',
   './icon-192-v4.png', './icon-512-v4.png', './apple-touch-icon-v4.png',
   './stockfish/stockfish-19-lite-single.js',
   './stockfish/stockfish-19-lite-single.wasm',
   './stockfish/Copying.txt', './stockfish/SOURCE.txt',
+  './fairy-stockfish/worker.js', './fairy-stockfish/fairy-stockfish.js', './fairy-stockfish/fairy-stockfish.wasm',
+  './fairy-stockfish/SOURCE.txt', './fairy-stockfish/SOURCE.md', './fairy-stockfish/COPYING.txt', './fairy-stockfish/AUTHORS',
+  './fairy-stockfish/fairy-source.tar.gz', './fairy-stockfish/single-worker.patch',
+  './fairy-stockfish/browser_main.cpp', './fairy-stockfish/Makefile.browser',
+  './sounds/classic/move.wav', './sounds/classic/capture.wav',
+  './sounds/classic/SOURCE.txt', './sounds/classic/LICENSE.txt', './sounds/classic/KENNEY-LICENSE.txt',
+  './sounds/classic/convert.mjs', './sounds/classic/decoder-package.json', './sounds/classic/decoder-lock.json',
+  './sounds/classic/source/impactWood_light_000.ogg', './sounds/classic/source/impactWood_medium_000.ogg',
 ]
 const STATIC_PATHS = new Set(CORE.map((path) => new URL(path, self.location.href).pathname))
 

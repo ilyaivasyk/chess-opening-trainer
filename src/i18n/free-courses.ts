@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js'
+import { Chess, type Move, type Square } from 'chess.js'
 import type { Course, CourseScenario, CourseTheory } from '../data/courses'
 
 const english: Record<string, { name: string; theory: CourseTheory; variants: string[] }> = {
@@ -144,9 +144,8 @@ const notes: Record<string, string> = {
   g1f3: 'The knight develops and controls central squares.', b1c3: 'The knight develops and adds central control.',
   g8f6: 'The knight develops and controls central squares.', b8c6: 'The knight develops and controls d4.',
   c1f4: 'The bishop develops before e3 closes its diagonal.', f1c4: 'The bishop develops toward f7.',
-  f1b5: 'The bishop attacks the knight that protects e5.', f8b4: 'The bishop pins or pressures the c3 knight.',
+  f1b5: 'The bishop attacks the knight that protects e5.',
   f8c5: 'The bishop develops toward f2.', c8f5: 'The bishop develops before ...e6 can restrict it.',
-  c8g4: 'The bishop develops and pins the f3 knight when it is present.', c1g5: 'The bishop develops and may pin the f6 knight.',
   e1g1: 'White castles to shelter the king and activate the rook.', e8g8: 'Black castles to shelter the king and activate the rook.',
   d5c4: 'Black captures the c4 pawn and changes the center.', e4e5: 'White gains space and may push a knight from f6.',
   d5e4: 'Black exchanges a central pawn and opens lines.', e4d5: 'White exchanges the central pawn on d5.',
@@ -160,14 +159,14 @@ const notes: Record<string, string> = {
   g2g3: 'White prepares to develop the bishop on g2.', g7g6: 'Black prepares to develop the bishop on g7.',
   e2e3: 'White supports d4 and opens the bishop on f1.', c2c3: 'White supports a later d4 advance.',
   d2d3: 'White supports e4 and keeps the center compact.', d7d6: 'Black supports e5 and opens the bishop on c8.',
-  f2f3: 'White reinforces e4 with the f-pawn.', a2a3: 'White asks the bishop on b4 to decide where to go.',
-  a7a6: 'Black asks a bishop on b5 to decide where to go.', h7h6: 'Black takes away the g5 square.',
+  f2f3: 'White reinforces e4 with the f-pawn.',
+  h7h6: 'Black takes away the g5 square.',
   b7b6: 'Black prepares to develop the bishop on b7.', c6c5: 'Black attacks the pawn center with ...c5.',
   a2a4: 'White restrains ...b5 on the queenside.', a4b3: 'The bishop retreats but keeps its diagonal.',
   a5b6: 'The bishop retreats while keeping its diagonal.', b1d2: 'The knight develops without blocking the c-pawn.',
   b2b4: 'White offers the b-pawn to gain time against the bishop.', b2c3: 'The b-pawn recaptures on c3.',
   b4a5: 'The bishop retreats to a5.', b5a3: 'The knight retreats to a3.',
-  b5a4: 'The bishop retreats while keeping pressure on c6.', b7b5: 'Black gains queenside space and attacks a bishop on a4.',
+  b5a4: 'The bishop retreats while keeping pressure on c6.',
   b8d7: 'The knight develops and supports the f6 knight.', c1e3: 'The bishop develops and supports the center.',
   c3b5: 'The knight jumps to b5, near c7 and d6.', c3d4: 'The pawn recaptures on d4 and builds a central duo.',
   c3e4: 'The knight captures on e4 and enters the center.', c5b4: 'The bishop checks from b4.',
@@ -187,8 +186,8 @@ const notes: Record<string, string> = {
   f4d6: 'The bishop captures on d6.', f4g3: 'The bishop retreats to g3 and keeps its diagonal.',
   f5g6: 'The bishop retreats to g6.', f7f6: 'Black supports e5 but loosens the king’s cover.',
   f8d6: 'The bishop develops toward the center.', g4f3: 'The bishop exchanges for the f3 knight.',
-  g5h4: 'The bishop retreats to h4 and keeps its pin.', a7a5: 'Black gains space on the queenside.',
-  b2b3: 'White supports b2 and prepares a bishop on b2.', b4c5: 'The bishop captures on c5.',
+  a7a5: 'Black gains space on the queenside.',
+  b4c5: 'The bishop captures on c5.',
   b5c4: 'The bishop returns to the c4 diagonal.', c1d2: 'The bishop develops to d2.',
   c3d1: 'The knight recaptures on d1.', c5f2: 'The bishop sacrifices itself on f2 with check.',
   c6d4: 'The knight captures on d4.', c6e7: 'The knight retreats to e7.',
@@ -217,6 +216,53 @@ const notes: Record<string, string> = {
 
 const pieces: Record<string, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }
 
+export function contextualMoveExplanation(move: Move, locale: 'uk' | 'en'): string | undefined {
+  const uci = `${move.from}${move.to}`
+  if (!['a2a3', 'a7a6', 'b7b5', 'b2b3', 'c8g4', 'c1g5', 'g5h4', 'f8b4'].includes(uci)) return
+  const position = new Chess(move.after)
+  const uk = locale === 'uk'
+  const names: Record<string, string> = { p: 'пішака', n: 'коня', b: 'слона', r: 'туру', q: 'ферзя', k: 'короля' }
+  const enemyAt = (square: Square) => {
+    const piece = position.get(square)
+    return piece && piece.color !== move.color ? piece : undefined
+  }
+  if (uci === 'a7a6' || uci === 'a2a3') {
+    const target: Square = uci === 'a7a6' ? 'b5' : 'b4'
+    const piece = enemyAt(target)
+    if (piece) return uk ? `Пішак ${move.to} атакує ${names[piece.type]} ${target}.` : `The pawn on ${move.to} attacks the ${pieces[piece.type]} on ${target}.`
+    return uk ? `Пішак ${move.to} контролює ${target} і стримує вихід ${move.color === 'w' ? 'чорних' : 'білих'} фігур на це поле.`
+      : `The pawn on ${move.to} controls ${target} and restricts enemy pieces from using that square.`
+  }
+  if (uci === 'b7b5') {
+    const target = (['a4', 'c4'] as Square[]).find((square) => enemyAt(square))
+    if (target) {
+      const piece = enemyAt(target)!
+      return uk ? `Пішак b5 атакує ${names[piece.type]} ${target} і здобуває простір на ферзевому фланзі.` : `The pawn on b5 attacks the ${pieces[piece.type]} on ${target} and gains queenside space.`
+    }
+    return uk ? 'Пішак b5 здобуває простір на ферзевому фланзі й контролює a4 та c4.' : 'The pawn on b5 controls a4 and c4 and gains queenside space.'
+  }
+  if (uci === 'b2b3') {
+    if (position.get('b6')?.type === 'q' && position.get('b6')?.color === 'b' && position.get('c2')?.type === 'p' && position.get('c2')?.color === 'w') {
+      return uk ? 'Білі переводять пішака з b2 на b3, де його захищає пішак c2 від ферзя b6, і готують Bb2.' : 'White moves the b2 pawn to b3, where the c2 pawn protects it against the queen on b6, and prepares Bb2.'
+    }
+    return uk ? 'Пішак b3 контролює a4 та c4 і готує розвиток слона на b2.' : 'The pawn on b3 controls a4 and c4 and prepares Bb2.'
+  }
+  const target: Square = uci === 'c8g4' ? 'f3' : uci === 'f8b4' ? 'c3' : 'f6'
+  if (enemyAt(target)?.type !== 'n') return uk ? `Слон на ${move.to} контролює ${target}.` : `The bishop on ${move.to} controls ${target}.`
+  const df = Math.sign(target.charCodeAt(0) - move.to.charCodeAt(0)), dr = Math.sign(+target[1] - +move.to[1])
+  for (let f = target.charCodeAt(0) + df, r = +target[1] + dr; f >= 97 && f <= 104 && r >= 1 && r <= 8; f += df, r += dr) {
+    const square = `${String.fromCharCode(f)}${r}` as Square
+    const behind = enemyAt(square)
+    if (!position.get(square)) continue
+    if (behind && ['k', 'q'].includes(behind.type)) return uk ? `Слон на ${move.to} зв’язує коня ${target} з ${behind.type === 'k' ? 'королем' : 'ферзем'} ${square}.`
+      : `The bishop pins the ${target} knight to the ${pieces[behind.type]} on ${square}.`
+    const blocker = position.get(square)!
+    const subjects: Record<string, string> = { p: 'пішак', n: 'кінь', b: 'слон', r: 'тура', q: 'ферзь', k: 'король' }
+    return uk ? `Слон на ${move.to} атакує коня ${target}; ${subjects[blocker.type]} ${square} закриває подальшу діагональ.` : `The bishop on ${move.to} attacks the knight on ${target}; the ${pieces[blocker.type]} on ${square} blocks the rest of the diagonal.`
+  }
+  return uk ? `Слон на ${move.to} атакує коня ${target}.` : `The bishop on ${move.to} attacks the knight on ${target}.`
+}
+
 function moveParts(uci: string) {
   return { from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' }
 }
@@ -226,10 +272,10 @@ function englishScenario(scenario: CourseScenario, name: string): CourseScenario
   const convert = (uci: string) => {
     const played = game.move(moveParts(uci))
     if (!played) throw new Error(`Illegal course move ${uci} in ${scenario.id}`)
-    const contextual = uci === 'c5d4' && played.piece === 'b' ? 'The bishop captures on d4.'
+    const contextual = contextualMoveExplanation(played, 'en') ?? (uci === 'c5d4' && played.piece === 'b' ? 'The bishop captures on d4.'
       : uci === 'c5b4' ? (played.captured ? 'The bishop captures the b4 pawn.' : 'The bishop checks from b4.')
       : uci === 'd1f3' && played.captured ? 'The queen recaptures on f3.'
-      : undefined
+      : undefined)
     return {
       title: `Play ${played.san}`,
       explanation: contextual ?? notes[uci] ?? `${played.color === 'w' ? 'White' : 'Black'} moves the ${pieces[played.piece]} to ${played.to}${played.captured ? ' and captures a piece' : ''}.`,

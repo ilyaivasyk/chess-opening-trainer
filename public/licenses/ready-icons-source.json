@@ -1,0 +1,188 @@
+{
+  "chessnut": {
+    "revision": "2b8eaf14a31edad7e9deb53b1473e1d4857868a9",
+    "license": "Apache-2.0",
+    "author": "Alexis Luengas"
+  },
+  "lucide": {
+    "version": "0.468.0",
+    "revision": "f12b0de177fbc2a6795e99be065887e72b237123",
+    "license": "ISC + inherited Feather MIT"
+  },
+  "files": [
+    {
+      "group": "pieces",
+      "name": "wK",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wK.svg",
+      "sha256": "e50809e91a15790c8d81d3f199bf569f0eb5a09c472a0415944e8c9e3cfcddd0"
+    },
+    {
+      "group": "pieces",
+      "name": "wQ",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wQ.svg",
+      "sha256": "2395664337bea8f13093858320cce6075d80f8086e6aa47e122ce556262b4d6b"
+    },
+    {
+      "group": "pieces",
+      "name": "wR",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wR.svg",
+      "sha256": "e7fb8605a9318ef50e497a97680e4722d3eabc1e9ab6e4e9f594b8f2ca2022e5"
+    },
+    {
+      "group": "pieces",
+      "name": "wB",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wB.svg",
+      "sha256": "14cd4828240708d4d8431034537e2a5fb662d5054246fef681b172680cae9fcd"
+    },
+    {
+      "group": "pieces",
+      "name": "wN",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wN.svg",
+      "sha256": "adc921896bb6e6547828f2a6eb3d5195dd1b7ac8e8c1d2a9085583e4d4d81b68"
+    },
+    {
+      "group": "pieces",
+      "name": "wP",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wP.svg",
+      "sha256": "0cf9dfe2f7b3ab11a7fdb13bf350f32e7a6c94e193fc023933e129ec02eeed8d"
+    },
+    {
+      "group": "pieces",
+      "name": "bK",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bK.svg",
+      "sha256": "220d75890b4368f0309bab0be40ac1dac6809508f5e1ecb119d35d225bf01f90"
+    },
+    {
+      "group": "pieces",
+      "name": "bQ",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bQ.svg",
+      "sha256": "0308426c9cfafabdce64600cbe90c193fc6ef7665f072b43d4dc82b5c1047670"
+    },
+    {
+      "group": "pieces",
+      "name": "bR",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bR.svg",
+      "sha256": "ad18856a97edf53281acc40e1e6e4f7021ed01fad380fff7e09e63465b3bb462"
+    },
+    {
+      "group": "pieces",
+      "name": "bB",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bB.svg",
+      "sha256": "f835819861774dcacef7370ed2c23d4022ef6c2b17383a6a79c5f683d105e8b6"
+    },
+    {
+      "group": "pieces",
+      "name": "bN",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bN.svg",
+      "sha256": "acabd5a82666927d850a9eaab6f3766ef196a999dd3c6de0f927a8f12dacd356"
+    },
+    {
+      "group": "pieces",
+      "name": "bP",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bP.svg",
+      "sha256": "073fb7b38b2ebe66ee54854fa492da6cc04e6d92bc679c860b77c254fa1d46ce"
+    },
+    {
+      "group": "ui",
+      "name": "gauge",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/gauge.svg",
+      "sha256": "d7710543a5085c5a61d0bbac1da8b89ef28e541b38ed739357991dff33d475b5"
+    },
+    {
+      "group": "ui",
+      "name": "graduation-cap",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/graduation-cap.svg",
+      "sha256": "326b4a1c18429509a697cbc0c49fdfcf9316da34bcf581569c2fc73cc772b86f"
+    },
+    {
+      "group": "ui",
+      "name": "home",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/house.svg",
+      "sha256": "1d3bb0587b8ffbe5e59de3436f880785c3eec7911bd06aabd7932195448b120b"
+    },
+    {
+      "group": "ui",
+      "name": "arrow-left",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/arrow-left.svg",
+      "sha256": "c5f4b88076108eb1a0d95336e1aa7e7bb1419a3a92af96f6247d88cd3456f933"
+    },
+    {
+      "group": "ui",
+      "name": "rotate-ccw",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/rotate-ccw.svg",
+      "sha256": "622685386ab4017eabfde01cd74550a20b1924df233b353f73b6b155371f2afd"
+    },
+    {
+      "group": "ui",
+      "name": "arrow-right",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/arrow-right.svg",
+      "sha256": "288397fdb73bb4f783cf9eabb726ff47357df1d4e3f1201dd748090579f108b9"
+    },
+    {
+      "group": "ui",
+      "name": "book-open",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/book-open.svg",
+      "sha256": "a5eb669f66989fdbc003b1689ebc93769b3b9d680f840573f2a3ac268756f894"
+    },
+    {
+      "group": "ui",
+      "name": "check",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/check.svg",
+      "sha256": "7f33acc9a77a61659531044525fc008edebe215bf4dcf1c789c8674ad3277db0"
+    },
+    {
+      "group": "ui",
+      "name": "star",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/star.svg",
+      "sha256": "c59da86b889569387db28e69ad00a89f96af22863ad9eea9aa12c4876a14338c"
+    },
+    {
+      "group": "ui",
+      "name": "arrow-up-right",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/arrow-up-right.svg",
+      "sha256": "50b2503b9d11881142255466b7e3461d022b919735841c321d72003ac9959fe1"
+    },
+    {
+      "group": "ui",
+      "name": "crown",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/crown.svg",
+      "sha256": "544c1b6181749ae4b4c98861a5a6ed1242940239cda97cc13c74e84a03fd68c0"
+    },
+    {
+      "group": "ui",
+      "name": "equal",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/equal.svg",
+      "sha256": "4880b6c8a80f4a36478ca5f9f2c162ff7a0a1e29360efadf2fce66ded52e14a0"
+    },
+    {
+      "group": "ui",
+      "name": "flag",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/flag.svg",
+      "sha256": "73d58bafed0501f646bdbb015cbb4de22142836f7ff1f60c1c6bd3b0b72d81db"
+    },
+    {
+      "group": "license",
+      "name": "chessnut.txt",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "group": "license",
+      "name": "chessnut-copyright.txt",
+      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/COPYRIGHT.txt",
+      "sha256": "a66f251bcdb99479c102695a75ba292244ccf45f1f2710af552acdf4887e4f90"
+    },
+    {
+      "group": "license",
+      "name": "lucide.txt",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/LICENSE",
+      "sha256": "1e7290b35280a048667bbf0ebabac1c7fd52a75300e8b2946ac165715997f2bc"
+    },
+    {
+      "group": "license",
+      "name": "feather.txt",
+      "url": "https://raw.githubusercontent.com/feathericons/feather/v4.29.2/LICENSE",
+      "sha256": "308028e93fcf84972523cdf6e616f73168546b4953895f516d01287f16fe7bee"
+    }
+  ]
+}

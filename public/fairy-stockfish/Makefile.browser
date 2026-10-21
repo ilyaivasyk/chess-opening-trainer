@@ -1,0 +1,8 @@
+# Build with Emscripten 3.1.74. Source revision is pinned in ENGINE-NOTICE.md.
+CXX = em++
+SOURCES = browser_main.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp material.cpp misc.cpp movegen.cpp movepick.cpp pawns.cpp position.cpp psqt.cpp search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp syzygy/tbprobe.cpp nnue/evaluate_nnue.cpp nnue/features/half_ka_v2.cpp partner.cpp parser.cpp piece.cpp variant.cpp xboard.cpp nnue/features/half_ka_v2_variants.cpp
+FLAGS = --bind -O3 -DNDEBUG -DNNUE_EMBEDDING_OFF -DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -std=c++17 -s MODULARIZE=1 -s DYNAMIC_EXECUTION=0 -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=67108864 -s MAXIMUM_MEMORY=134217728 -s STACK_SIZE=8388608 -s ENVIRONMENT=web,worker,node
+build:
+	$(CXX) $(FLAGS) -s EXPORT_NAME=FairyStockfish $(SOURCES) -o fairy-stockfish.js
+rules:
+	$(CXX) $(FLAGS) -DNO_THREADS -s EXPORT_ES6=1 -s EXPORT_NAME=FairyRules $(filter-out browser_main.cpp,$(SOURCES)) ffishjs.cpp -o ffish.js

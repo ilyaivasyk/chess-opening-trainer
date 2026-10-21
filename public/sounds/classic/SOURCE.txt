@@ -1,0 +1,67 @@
+Kenney classic wood sound assets — CC0-1.0
+
+Author/affirmer: Kenney (Kenney Vleugels), www.kenney.nl
+Pack: Impact Sounds 1.0, creation date 19 December 2019
+Primary source: https://kenney.nl/assets/impact-sounds
+Official archive: https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip
+Archive size: 800850 bytes
+Archive SHA256: 029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8
+Retrieved/verified: 3 October 2026
+
+The official page and the archive's License.txt explicitly dedicate these assets
+under Creative Commons Zero (CC0). The original notice is KENNEY-LICENSE.txt.
+Full CC0 legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt
+The exact legal text is provided as LICENSE.txt. Commercial use and modification
+are permitted; credit is optional. This app does not imply Kenney endorsement.
+These are Kenney wood impacts, not Chess.com recordings and not a claim that
+Chess.com's recordings were licensed or reproduced.
+
+Selected original files, copied unchanged from the verified official ZIP:
+  Audio/impactWood_light_000.ogg -> source/impactWood_light_000.ogg -> move.wav
+  Audio/impactWood_medium_000.ogg -> source/impactWood_medium_000.ogg -> capture.wav
+
+Transformation: decode Ogg Vorbis, preserve all frames and both stereo channels
+at 44100 Hz, then quantize each finite sample to signed 16-bit little-endian PCM
+using Math.round(sample * 32767). Write the conventional 44-byte RIFF/WAVE header.
+No gain, normalization, silence/tail trimming, mixing, resampling or dithering.
+No sound was synthesized. Both source files decode with zero reported errors.
+
+Decoded/converted measurements (RMS and peak relative to PCM full scale):
+  move.wav: 11713 frames, 0.265600907 s, peak 0.879180908, RMS 0.076636370,
+            stereo PCM16, 44100 Hz, 46896 bytes
+  capture.wav: 14671 frames, 0.332675737 s, peak 0.887725830, RMS 0.074106729,
+               stereo PCM16, 44100 Hz, 58728 bytes
+There are no clipping samples. These measurements do not establish a subjective
+preference or an exact Chess.com match. Device volume remains a playback setting.
+
+Conversion tool: @wasm-audio-decoders/ogg-vorbis 0.1.20 (MIT), based on libvorbis
+(BSD) and codec-parser (LGPL-3.0-or-later); dependency versions and registry
+integrity values are fixed in decoder-lock.json. Source revision:
+https://github.com/eshaz/wasm-audio-decoders/tree/6fe55b9a29543d0a5a2d896338c39199a81d9a58/src/ogg-vorbis
+Registry archive: https://registry.npmjs.org/@wasm-audio-decoders/ogg-vorbis/-/ogg-vorbis-0.1.20.tgz
+Verified registry integrity: sha512-zaQPasU5usRjUDXtXOHYED5tfkR4QMXd+EH3Nrz1+4+M5pCsdD+s9YxJqb0oqnTyRu/KUujOmu5Z/m/NT47vwg==
+The decoder and its dependency code are used only in an isolated development
+directory. They are not app runtime dependencies and are not bundled with the
+app. Only the package/lock metadata and our readable conversion script are
+included to reproduce the CC0 audio conversion. No install scripts are run.
+
+Reproduction from the repository root (Node.js 24 was used):
+  decoder_dir="$(mktemp -d /private/tmp/kenney-convert.XXXXXX)"
+  cp public/sounds/classic/decoder-package.json "$decoder_dir/package.json"
+  cp public/sounds/classic/decoder-lock.json "$decoder_dir/package-lock.json"
+  npm ci --prefix "$decoder_dir" --cache "$decoder_dir/cache" --ignore-scripts --no-audit --no-fund
+  node public/sounds/classic/convert.mjs "$decoder_dir" "$decoder_dir/output"
+  shasum -a 256 "$decoder_dir/output/move.wav" "$decoder_dir/output/capture.wav"
+Compare the resulting WAV hashes with the inventory below. The two included
+original OGG files are sufficient inputs; downloading the entire pack is optional.
+
+SHA256 inventory (paths relative to sounds/classic):
+3cbc9ff7b5ef0773739805e897e2def3f14398f363e4bcc12dc94d2548aac8aa  move.wav
+ac93e1c876c29d2c31d958392ddbf23744ed12fc481e475a7d7e77e985d4949b  capture.wav
+a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499  LICENSE.txt
+b49aa9c56b04528b95913de13e506a0f7c5e807b9925db9bfef86af1f91120db  KENNEY-LICENSE.txt
+3d86c8e247daa3f6257f1257673033f94b16412f40bcf04be4f953340d68d09a  convert.mjs
+3ce38d87821ea741633632c373094be289c1a82bcaca0619594ca9c1d10c3698  decoder-package.json
+80c4dbca28d8a3a333b2c34a7d0a307fa98d3c246445a792b48eae18beeb41eb  decoder-lock.json
+eb45e35b4bed784d3f120de4afec4b0d6ac09d9e143cce8cfcb7d739e1b1f3c3  source/impactWood_light_000.ogg
+1723a9fd25103ed41af06054814e84e65f4a772bac86ab2dc927da93d9592ff5  source/impactWood_medium_000.ogg

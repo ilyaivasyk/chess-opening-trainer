@@ -17,6 +17,7 @@ type CatalogRow = readonly [id: string, category: CourseCategory, eco: string, u
 // lesson asset contains the actual training lines; this file is safe to bundle.
 // https://github.com/lichess-org/chess-openings
 const rows: CatalogRow[] = [
+  ['danish', 'beginner', 'C21', 'Данський гамбіт', 'Danish Gambit'],
   ['italian', 'beginner', 'C50', 'Італійська партія', 'Italian Game'],
   ['london', 'beginner', 'D02', 'Лондонська система', 'London System'],
   ['queens-gambit', 'beginner', 'D06', 'Ферзевий гамбіт', "Queen's Gambit"],
@@ -38,6 +39,7 @@ const rows: CatalogRow[] = [
   ['dutch', 'beginner', 'A80', 'Голландський захист', 'Dutch Defense'],
   ['queens-pawn', 'beginner', 'D00', 'Дебют ферзевого пішака', "Queen's Pawn Game"],
 
+  ['stafford', 'intermediate', 'C42', 'Гамбіт Стаффорда · ризикований', 'Stafford Gambit · risky'],
   ['ruy-lopez', 'intermediate', 'C60', 'Іспанська партія', 'Ruy Lopez'],
   ['sicilian', 'intermediate', 'B20', 'Сицилійський захист', 'Sicilian Defense'],
   ['english', 'intermediate', 'A10', 'Англійський початок', 'English Opening'],

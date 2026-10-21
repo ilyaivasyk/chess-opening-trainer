@@ -25,11 +25,12 @@ for (const course of courses) for (const scenario of [...course.scenarios,...cou
   const play = (uci, explanation) => {
     const move = game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'})
     if (!explanation) return
-    const match = explanation.match(/^(?:The |Black’s |White’s )?(knight|bishop|queen|rook|pawn) (?:develops and )?(attacks|protects|controls|pressures|supports) (?:the )?([a-h][1-8])\b/i)
+    const match = explanation.match(/^(?:The |Black’s |White’s )?(knight|bishop|queen|rook|pawn)(?: on [a-h][1-8])? (?:develops and )?(attacks|protects|controls|pressures|supports) (?:the )?(?:(knight|bishop|queen|rook|pawn) on )?([a-h][1-8])\b/i)
     if (match) {
       const types = {knight:'n',bishop:'b',queen:'q',rook:'r',pawn:'p'}
       assert.equal(move.piece,types[match[1].toLowerCase()],`${course.id}/${uci}: explanation describes a different piece`)
-      assert(rayAttacks(game,move.to,match[3]),`${course.id}/${uci}: ${explanation}`)
+      assert(rayAttacks(game,move.to,match[4]),`${course.id}/${uci}: ${explanation}`)
+      if (match[3]) assert.equal(game.get(match[4])?.type,types[match[3].toLowerCase()],`${course.id}/${uci}: ${explanation} names an absent target piece`)
       const second = explanation.slice(match[0].length).match(/^ and ([a-h][1-8])\b/)
       if (second) { assert(rayAttacks(game,move.to,second[1]),`${course.id}/${uci}: ${explanation}`); checked++ }
       checked++
@@ -52,4 +53,22 @@ for (const course of courses) for (const scenario of [...course.scenarios,...cou
   for(const step of scenario.steps){play(step.userMove,step.explanation);if(step.opponentMove)play(step.opponentMove,step.opponentExplanation)}
 }
 assert(checked > 20)
-console.log(`✓ ${checked} explicit piece-target and pin claims agree with board geometry (${courses.length} English course texts); strategic and conditional prose still requires editorial review`)
+for (const locale of ['uk', 'en']) {
+  const publicCourses = getCourses(locale)
+  const cases = [
+    ['sicilian', 'white-najdorf', 'a7a6', locale === 'uk' ? 'контролює b5' : 'controls b5'],
+    ['queens-gambit', 'white-albin', 'a2a3', locale === 'uk' ? 'контролює b4' : 'controls b4'],
+    ['queens-gambit', 'white-semi-slav', 'b7b5', locale === 'uk' ? 'слона c4' : 'bishop on c4'],
+    ['queens-gambit', 'white-chigorin', 'c8g4', locale === 'uk' ? 'пішак e2' : 'pawn on e2'],
+    ['qgd', 'white-tartakower', 'g5h4', locale === 'uk' ? 'слон e7' : 'bishop on e7'],
+    ['london', 'white-queen-pressure', 'b2b3', locale === 'uk' ? 'захищає пішак c2' : 'c2 pawn protects it'],
+  ]
+  for (const [id, scenarioId, uci, expected] of cases) {
+    const scenario = publicCourses.find((course) => course.id === id).scenarios.find((scenario) => scenario.id === scenarioId)
+    const notes = scenario.steps.flatMap((step) => [[step.userMove,step.explanation],[step.opponentMove,step.opponentExplanation]])
+    const note = notes.find(([move]) => move === uci)[1]
+    assert(note.includes(expected),`${locale}/${id}/${scenarioId}/${uci}: ${note}`)
+    if (['c8g4','g5h4'].includes(uci)) assert(!/зв’яз|\bpin/i.test(note),`${locale}/${scenarioId}: blocker must prevent a pin claim`)
+  }
+}
+console.log(`✓ ${checked} explicit piece-target and pin claims agree with board geometry (${courses.length} English course texts); six contextual regressions pass in UK/EN; strategic prose still requires editorial review`)

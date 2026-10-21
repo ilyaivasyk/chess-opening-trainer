@@ -12,17 +12,28 @@ const compiled = ts.transpileModule(source, {
 await writeFile(runtimePath, compiled)
 
 const workers = []
+let fairyScenario = 'auto'
 class MockWorker {
   onmessage
   onerror
   messages = []
+  terminated = false
   scenario = workers.length === 0 ? 'matched' : workers.length === 3 ? 'auto' : 'silent'
 
-  constructor() { workers.push(this) }
+  constructor(url) {
+    this.url = url
+    if (url.includes('fairy-stockfish/')) this.scenario = fairyScenario
+    workers.push(this)
+  }
   postMessage(message) {
     this.messages.push(message)
     if (message === 'uci') queueMicrotask(() => this.onmessage?.({ data: 'uciok' }))
-    if (message.startsWith('position fen ')) this.fen = message.slice('position fen '.length)
+    if (message.startsWith('position fen ')) {
+      const [fen, moves = ''] = message.slice('position fen '.length).split(' moves ')
+      const position = new Chess(fen)
+      for (const uci of moves.split(' ').filter(Boolean)) position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })
+      this.fen = position.fen()
+    }
     if (message.startsWith('go ') && this.scenario === 'matched') queueMicrotask(() => {
       for (const line of [
         'info depth 12 multipv 2 score cp 900 pv d2d4 d7d5',
@@ -50,14 +61,15 @@ class MockWorker {
       this.onmessage?.({ data: 'bestmove (none)' })
     })
   }
-  terminate() {}
+  terminate() { this.terminated = true }
 }
 
 globalThis.window = { setTimeout, clearTimeout }
 globalThis.Worker = MockWorker
 
 try {
-  const { StockfishEngine } = await import(runtimePath.href)
+  const { StockfishEngine, ENGINE_STRENGTHS } = await import(runtimePath.href)
+  assert.deepEqual(ENGINE_STRENGTHS, [600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2400, 3000])
   const game = new Chess()
   game.loadPgn('1. e4 e5 2. Nf3 Nc6 3. Bc4')
   game.undo()
@@ -110,17 +122,24 @@ try {
   const boundEngine = new StockfishEngine()
   const boundWorker = workers.at(-1)
   boundWorker.scenario = 'bound'
-  const recovered = await boundEngine.analyse(fenBefore, 3000, 1)
+  const historyPosition = new Chess()
+  historyPosition.loadPgn('1. e4 e5 2. Nf3 Nc6')
+  const history = { initialFen: new Chess().fen(), moves: historyPosition.history({ verbose: true }).map((move) => `${move.from}${move.to}${move.promotion ?? ''}`) }
+  const activeHistory = { ...history, moves: [...history.moves] }
+  const recoveredSearch = boundEngine.analyse(fenBefore, 3000, 1, activeHistory)
+  activeHistory.moves.push('quit')
+  const recovered = await recoveredSearch
   assert.equal(recovered.bestMove, 'b1c3')
   assert.equal(recovered.scoreCp, 40, 'review must use the recovered exact score, never its earlier bound')
   assert.deepEqual(recovered.principalVariation, ['b1c3', 'g8f6'])
   assert.equal(boundWorker.messages.filter((message) => message.includes('searchmoves b1c3')).length, 1)
+  assert.deepEqual(boundWorker.messages.filter((message) => message.startsWith('position ')), Array(2).fill(`position fen ${history.initialFen} moves ${history.moves.join(' ')}`), 'score recovery must preserve repetition history')
   boundEngine.destroy()
 
   const playingEngine = new StockfishEngine()
   const playingWorker = workers.at(-1)
   playingWorker.scenario = 'bound-only'
-  assert.equal(await playingEngine.bestMove(fenBefore, 1200), 'b1c3', 'a legal opponent move does not need a review-quality score')
+  assert.equal(await playingEngine.bestMove(fenBefore, 1400), 'b1c3', 'a legal opponent move does not need a review-quality score')
   assert.ok(!playingWorker.messages.some((message) => message.includes('searchmoves')), 'playing should not perform an extra scored search')
   playingEngine.destroy()
 
@@ -135,7 +154,80 @@ try {
   workers.at(-1).scenario = 'no-move'
   await assert.rejects(emptyEngine.analyse(fenBefore, 3000, 1), /unfinished position/, 'no move in a nonterminal position must not become a fake zero score')
   emptyEngine.destroy()
-  console.log('✓ Matched score/PV, legal pre-move replay, 120-ply search, timeout/cancellation, exact-score recovery, and separate playing API')
+
+  const validationEngine = new StockfishEngine()
+  const validationWorker = workers.at(-1)
+  await assert.rejects(validationEngine.analyse(fenBefore, 3000, 1, { ...history, moves: ['e2e4\nquit'] }), /history/)
+  await assert.rejects(validationEngine.analyse(fenBefore, 3000, 1, { ...history, moves: ['e2e5'] }), /Invalid move/)
+  await assert.rejects(validationEngine.analyse(fenBefore, 3000, 1, { ...history, moves: [] }), /does not match/)
+  await assert.rejects(validationEngine.analyse(fenBefore, 700, 1), /Unsupported Stockfish strength/)
+  assert.ok(!validationWorker.messages.some((message) => message.startsWith('go ')), 'invalid history or an unsupported Elo must fail before engine commands')
+  validationEngine.destroy()
+
+  const lowEngine = new StockfishEngine()
+  const mainWorker = workers.at(-1)
+  mainWorker.scenario = 'auto'
+  const lazyStart = workers.length
+  await lowEngine.analyse(fenBefore, 3000, 1)
+  assert.equal(workers.length, lazyStart, 'MAX analysis must never load the second engine')
+  for (const strength of [600, 800, 1000, 1200]) {
+    assert.ok(await lowEngine.bestMove(fenBefore, strength, history))
+    const lowWorker = workers.at(-1)
+    assert.equal(lowWorker.url, '/fairy-stockfish/worker.js')
+    assert.ok(lowWorker.messages.includes(`setoption name UCI_Elo value ${strength}`))
+    assert.ok(lowWorker.messages.includes(`position fen ${history.initialFen} moves ${history.moves.join(' ')}`))
+  }
+  assert.equal(workers.length, lazyStart + 1, 'low-strength searches must reuse the lazily loaded Fairy worker')
+  assert.equal((await lowEngine.analyse(fenBefore, 600, 1, history)).scoreCp, 17, 'explicit low-strength analysis must also use Fairy')
+  for (const strength of [1400, 1600, 1800, 2000, 2400, 3000]) await lowEngine.bestMove(fenBefore, strength)
+  assert.ok(!mainWorker.messages.some((message) => /UCI_Elo value (600|800|1000|1200)$/.test(message)), 'Stockfish 19 must never receive unsupported low Elo')
+  const fairyWorker = workers.at(-1)
+  lowEngine.destroy()
+  assert.ok(mainWorker.terminated && fairyWorker.terminated, 'destroy must dispose both engine workers')
+
+  fairyScenario = 'silent'
+  const cancelledLowEngine = new StockfishEngine()
+  const cancelledMainWorker = workers.at(-1)
+  const lowPending = cancelledLowEngine.bestMove(fenBefore, 600)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const cancelledFairyWorker = workers.at(-1)
+  await assert.rejects(cancelledLowEngine.bestMove(fenBefore, 1400), /already searching/, 'two engines must not allow overlapping wrapper searches')
+  cancelledLowEngine.destroy()
+  await assert.rejects(lowPending, /stopped/)
+  cancelledFairyWorker.onmessage?.({ data: 'bestmove f1b5' })
+  assert.ok(cancelledMainWorker.terminated && cancelledFairyWorker.terminated)
+
+  const failedLowEngine = new StockfishEngine()
+  const failedMainWorker = workers.at(-1)
+  failedMainWorker.scenario = 'auto'
+  const failedPending = failedLowEngine.bestMove(fenBefore, 800)
+  const failedFairyWorker = workers.at(-1)
+  failedFairyWorker.onmessage?.({ data: { error: 'Could not load WASM' } })
+  await assert.rejects(failedPending, /Could not load Stockfish/)
+  assert.ok(failedFairyWorker.terminated, 'structured WASM-loading errors must clean up the Fairy worker')
+  assert.ok(await failedLowEngine.bestMove(fenBefore, 1400), 'failure of the optional engine must not disable Stockfish 19')
+  fairyScenario = 'auto'
+  assert.ok(await failedLowEngine.bestMove(fenBefore, 800), 'a failed Fairy worker must be recreated on the next low search')
+  assert.notEqual(workers.at(-1), failedFairyWorker)
+  failedLowEngine.destroy()
+
+  const originalSetTimeout = window.setTimeout
+  let expireStartup
+  window.setTimeout = (callback, delay) => {
+    if (delay === 12_000) expireStartup = callback
+    return originalSetTimeout(callback, delay)
+  }
+  try {
+    const startupEngine = new StockfishEngine()
+    const startupWorker = workers.at(-1)
+    const pendingStartup = startupEngine.analyse(fenBefore, 3000, 1)
+    expireStartup()
+    await assert.rejects(pendingStartup, /did not start/)
+    assert.equal(startupWorker.terminated, true, 'startup timeout must terminate its worker without waiting for another caller')
+    startupEngine.destroy()
+    assert.equal(startupWorker.messages.filter((message) => message === 'quit').length, 1, 'cleanup must be idempotent')
+  } finally { window.setTimeout = originalSetTimeout }
+  console.log('✓ Matched score/PV, legal pre-move replay, 120-ply search, startup/search timeout cleanup, cancellation, history-preserving exact-score recovery, lazy Fairy low-Elo routing/retry/disposal, validation, and separate playing API')
 } finally {
   await unlink(runtimePath)
 }

@@ -1,0 +1,171 @@
+--- a/src/thread.cpp
++++ b/src/thread.cpp
+@@ -36,23 +36,13 @@
+ /// Thread constructor launches the thread and waits until it goes to sleep
+ /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
+ 
+-Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
+-
+-  wait_for_search_finished();
+-}
++Thread::Thread(size_t n) : idx(n) { searching = false; }
+ 
+ 
+ /// Thread destructor wakes up the thread in idle_loop() and waits
+ /// for its termination. Thread should be already waiting.
+ 
+-Thread::~Thread() {
+-
+-  assert(!searching);
+-
+-  exit = true;
+-  start_searching();
+-  stdThread.join();
+-}
++Thread::~Thread() {}
+ 
+ 
+ /// Thread::clear() reset histories, usually before a new game
+@@ -79,63 +69,29 @@
+ /// Thread::start_searching() wakes up the thread that will start the search
+ 
+ void Thread::start_searching() {
+-
+-  std::lock_guard<std::mutex> lk(mutex);
+   searching = true;
+-  cv.notify_one(); // Wake up the thread in idle_loop()
++  search();
++  searching = false;
+ }
+ 
+ 
+ /// Thread::wait_for_search_finished() blocks on the condition variable
+ /// until the thread has finished searching.
+ 
+-void Thread::wait_for_search_finished() {
+-
+-  std::unique_lock<std::mutex> lk(mutex);
+-  cv.wait(lk, [&]{ return !searching; });
+-}
++void Thread::wait_for_search_finished() {}
+ 
+ 
+ /// Thread::idle_loop() is where the thread is parked, blocked on the
+ /// condition variable, when it has no work to do.
+ 
+-void Thread::idle_loop() {
+-
+-  // If OS already scheduled us on a different group than 0 then don't overwrite
+-  // the choice, eventually we are one of many one-threaded processes running on
+-  // some Windows NUMA hardware, for instance in fishtest. To make it simple,
+-  // just check if running threads are below a threshold, in this case all this
+-  // NUMA machinery is not needed.
+-  if (Options["Threads"] > 8)
+-      WinProcGroup::bindThisThread(idx);
+-
+-  while (true)
+-  {
+-      std::unique_lock<std::mutex> lk(mutex);
+-      searching = false;
+-      cv.notify_one(); // Wake up anyone waiting for search finished
+-      // Start ponder search from separate thread to prevent deadlock
+-      if (Threads.size() && this == Threads.main() && XBoard::stateMachine && XBoard::stateMachine->ponderMove)
+-      {
+-          NativeThread t(&XBoard::StateMachine::ponder, XBoard::stateMachine);
+-          t.detach();
+-      }
+-      cv.wait(lk, [&]{ return searching; });
+-
+-      if (exit)
+-          return;
+-
+-      lk.unlock();
+-
+-      search();
+-  }
+-}
++void Thread::idle_loop() {}
+ 
+ /// ThreadPool::set() creates/destroys threads to match the requested number.
+ /// Created and launched threads will immediately go to sleep in idle_loop.
+ /// Upon resizing, threads are recreated to allow for binding if necessary.
+ 
+ void ThreadPool::set(size_t requested) {
++  requested = std::min(requested, size_t(1));
+ 
+   if (size() > 0)   // destroy any existing thread(s)
+   {
+--- a/src/tt.cpp
++++ b/src/tt.cpp
+@@ -84,29 +84,7 @@
+ //  in a multi-threaded way.
+ 
+ void TranspositionTable::clear() {
+-
+-  std::vector<std::thread> threads;
+-
+-  for (size_t idx = 0; idx < Options["Threads"]; ++idx)
+-  {
+-      threads.emplace_back([this, idx]() {
+-
+-          // Thread binding gives faster search on systems with a first-touch policy
+-          if (Options["Threads"] > 8)
+-              WinProcGroup::bindThisThread(idx);
+-
+-          // Each thread will zero its part of the hash table
+-          const size_t stride = size_t(clusterCount / Options["Threads"]),
+-                       start  = size_t(stride * idx),
+-                       len    = idx != Options["Threads"] - 1 ?
+-                                stride : clusterCount - start;
+-
+-          std::memset(&table[start], 0, len * sizeof(Cluster));
+-      });
+-  }
+-
+-  for (std::thread& th : threads)
+-      th.join();
++  std::memset(table, 0, clusterCount * sizeof(Cluster));
+ }
+ 
+ 
+--- a/src/uci.cpp
++++ b/src/uci.cpp
+@@ -611,4 +611,26 @@
+ 
+ Protocol CurrentProtocol = UCI_GENERAL; // Global object
+ 
++// Browser transport: commands run synchronously inside one dedicated Worker.
++void browser_command(std::string cmd) {
++  static Position pos;
++  static StateListPtr states(new std::deque<StateInfo>(1));
++  static bool initialized = false;
++  if (!initialized) {
++    pos.set(variants.find(Options["UCI_Variant"])->second, variants.find(Options["UCI_Variant"])->second->startFen, false, &states->back(), Threads.main());
++    initialized = true;
++  }
++  istringstream is(cmd);
++  string token;
++  is >> token;
++  if (token == "uci") sync_cout << "id name " << engine_info(true) << "\n" << Options << "\nuciok" << sync_endl;
++  else if (token == "isready") sync_cout << "readyok" << sync_endl;
++  else if (token == "setoption") setoption(is);
++  else if (token == "position") position(pos, is, states);
++  else if (token == "go") go(pos, is, states);
++  else if (token == "ucinewgame") Search::clear();
++  else if (token == "stop" || token == "quit") Threads.stop = true;
++  else if (token == "d") sync_cout << pos << sync_endl;
++}
++
+ } // namespace Stockfish
+diff --git a/src/ffishjs.cpp b/src/ffishjs.cpp
+--- a/src/ffishjs.cpp
++++ b/src/ffishjs.cpp
+@@ -760,7 +760,7 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
+   function("setOption", &ffish::set_option<std::string>);
+   function("setOptionInt", &ffish::set_option<int>);
+   function("setOptionBool", &ffish::set_option<bool>);
+-  function("readGamePGN", &read_game_pgn);
++  function("readGamePGN", &read_game_pgn, return_value_policy::take_ownership());
+   function("variants", &ffish::available_variants);
+   function("loadVariantConfig", &ffish::load_variant_config);
+   function("capturesToHand", &ffish::captures_to_hand);

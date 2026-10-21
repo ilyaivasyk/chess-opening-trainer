@@ -1,0 +1,46 @@
+Fairy-Stockfish browser opponent engine
+
+Official engine source: fairy-stockfish/Fairy-Stockfish
+Pinned revision: 43b66c8abfebfcab893a3a4c349aa790d18df148
+Source URL: https://github.com/fairy-stockfish/Fairy-Stockfish/tree/43b66c8abfebfcab893a3a4c349aa790d18df148
+Browser compilation and port publisher: ChessPlayX, https://chessplayx.com/engines/fairy/
+Retrieved: 2026-10-03
+License: GPL-3.0-or-later; upstream contributors are listed in AUTHORS.
+
+These nine publisher files are redistributed without modification. The complete
+fairy-source.tar.gz archive contains 112 files. All 112 file contents were compared
+with the official GitHub source archive at the pinned revision and matched exactly;
+no missing, additional or differing files were found. single-worker.patch changes
+thread.cpp, tt.cpp, uci.cpp and ffishjs.cpp; search, evaluation and strength-option
+source files are unchanged. browser_main.cpp and Makefile.browser supply the
+single-worker port. They add a cfour variant definition but retain default chess.
+The port disables NNUE, uses one synchronous Worker and requires no SharedArrayBuffer,
+COOP/COEP headers, SIMD or external network model. The published rebuild toolchain
+is Emscripten 3.1.74. A reproducible rebuild of the delivered JS/WASM has not been
+performed locally; source comparison does not prove compiled-binary equivalence.
+The shipped worker bridge, JS glue and WASM passed a browser-like Node VM probe
+with SharedArrayBuffer and Atomics unavailable. It advertised the source's exact
+strength ranges and returned legal moves at 600, 800, 1000 and 1200. This is not a
+physical iPhone Safari/PWA test.
+
+Rebuild instructions and publisher details are in SOURCE.md. Deliver the archive,
+patch, browser_main.cpp, Makefile.browser, AUTHORS and COPYING.txt with these
+binaries. Our worker.js is the readable UCI transport; bounded synchronous searches
+are cancelled by terminating the Worker, because stop cannot interrupt a running
+single-worker WASM call.
+
+The official source declares Skill Level -20..20 and UCI_Elo 500..2850. These are
+engine-calibrated targets, not verified human/FIDE/Chess.com ratings on this device.
+Stockfish 19 remains the separate review engine. App-wide GPL compatibility and
+App Store source/distribution obligations remain unresolved.
+
+SHA-256 (exact publisher files):
+a42823ca0d4c17b8af0ad9d779ddf6deb192d8571555cf7b6db64634c6d96c76  fairy-stockfish.js
+716a7f89c43b0c253d76dd93c3a9059afb8c3fcc67d93a688c8ae838ea4fb0dd  fairy-stockfish.wasm
+d5b658d04aad53b390eef1069c4e493d5a216f6d0f939e70ce4d2f8beb16cbb0  SOURCE.md
+7947e4bcc494ead86949e700f528d2417ad12794b982b3d01fabd2a02488562e  fairy-source.tar.gz
+55cf0b8a25ce9ed9f190bc266575ab642b49604d6efcb38a7af6b0538f730efe  single-worker.patch
+4ee9ea7898ed09d0fb1c74436ca4608b21409d5593fdb9909a448f83eeb89081  browser_main.cpp
+063535fad10403ccb75c0cbe0bbdf8a796159ab33f51fe4027728ec6cae58590  Makefile.browser
+55a0a4599358308af8349344d79176469f04119558e85595efe0a39b583cdf00  AUTHORS
+8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  COPYING.txt

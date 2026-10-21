@@ -1,19 +1,23 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Chess, type Move, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
-import { MoveIcon, PieceIcon, CapturedPieces, KingResultBadge, resultLoser as getResultLoser } from './board-icons'
+import { MoveIcon, PieceIcon, CapturedPieces, GameResultIcon, KingResultBadge, BOARD_PIECES, UiIcon, resultLoser as getResultLoser } from './board-icons'
 import { courses, getCatalog, getCourses, type Course, type Locale } from './data/courses'
-import { StockfishEngine, type EngineStrength } from './stockfish'
+import { ENGINE_STRENGTHS, StockfishEngine, type EngineStrength, type EngineHistory } from './stockfish'
 import { getPremiumCourses, getPremiumProducts, getPremiumStatus, isNativeIOS, onPremiumStatusChange, purchasePremium, restorePurchases, type PremiumProduct } from './native/purchases'
 import { applyPwaUpdate, getPwaStatus, onPwaStatusChange } from './pwa'
-import { detectOpeningKey, hasLostF7Pressure } from './review-context'
-import { analyseRecordedGame, gameAccuracy, gamePerformance, lichessMoveAccuracy, materialBalance, winPercent, type AnalysedMove, type AnalysisLabel, type GameMoveRecord, type MoveQuality } from './game-analysis'
+import { detectOpeningKey, detectOpeningName, hasLostF7Pressure, isBookMove as isKnownBookMove } from './review-context'
+import { analyseRecordedGame, gameAccuracy, sampleAccuracy, gamePerformance, lichessMoveAccuracy, materialBalance, winPercent, type AnalysedMove, type AnalysisLabel, type GameMoveRecord, type MoveQuality } from './game-analysis'
+import { buildTrainingReplies } from './training-replies'
+import { disposeChessSounds, getChessSoundsEnabled, setChessSoundsEnabled, playChessSound as playSound, unlockChessSounds } from './sounds'
+import { getDropdownPlacement } from './dropdown-position'
+import { BOARD_THEMES, getBoardTheme, type BoardTheme } from './board-appearance'
 
 declare const __PREVIEW_COURSES__: { uk: Course[]; en: Course[] } | null
 const previewCourses = typeof __PREVIEW_COURSES__ === 'undefined' ? null : __PREVIEW_COURSES__
 
 type Mode = 'coach' | 'practice' | 'exam'
-type Screen = 'home' | 'theory' | 'train' | 'rating'
+type Screen = 'home' | 'openings' | 'theory' | 'train' | 'rating'
 type Category = 'beginner' | 'intermediate' | 'advanced'
 type ColorFilter = 'all' | 'white' | 'black'
 type VariantFilter = string
@@ -158,8 +162,8 @@ const ui = {
   tryReviewAgain: { uk: 'Спробувати ще раз', en: 'Try again' },
   close: { uk: 'Закрити', en: 'Close' },
   reviewProTitle: { uk: 'Вивчай більше. Аналізуй кожну партію.', en: 'Learn more. Review every game.' },
-  reviewProDescription: { uk: 'Відкрий 49 додаткових дебютів і повний аналіз партій зі Stockfish.', en: 'Unlock 49 more openings and full game review with Stockfish.' },
-  proBenefitCatalog: { uk: '60 дебютів для гри білими й чорними', en: '60 openings for White and Black' },
+  reviewProDescription: { uk: 'Відкрий {count} додаткових дебютів і повний аналіз партій зі Stockfish.', en: 'Unlock {count} more openings and full game review with Stockfish.' },
+  proBenefitCatalog: { uk: '{count} дебютів для гри білими й чорними', en: '{count} openings for White and Black' },
   proBenefitReview: { uk: 'Повний аналіз після кожної партії', en: 'Full review after every game' },
   proBenefitLines: { uk: 'Пояснення ходів і найкраща лінія', en: 'Move explanations and the best line' },
   yearly: { uk: 'Річна підписка', en: 'Yearly subscription' },
@@ -183,6 +187,10 @@ const ui = {
   ratingDiscoverDetail: { uk: '2 повні партії: білими й чорними', en: '2 full games: White and Black' },
   openingTraining: { uk: 'Тренування дебютів', en: 'Opening training' },
   trainingDetail: { uk: 'Підказки, практика та іспит', en: 'Hints, practice, and exam' },
+  boardAppearance: { uk: 'Оформлення дошки', en: 'Board appearance' },
+  classic: { uk: 'Класична', en: 'Classic' },
+  walnut: { uk: 'Горіх', en: 'Walnut' },
+  blue: { uk: 'Синя', en: 'Blue' },
   chooseOpening: { uk: 'Обери дебют', en: 'Choose an opening' },
   catalogCount: { uk: '{free} безкоштовно · {total} у каталозі', en: '{free} free · {total} in the catalog' },
   openingList: { uk: 'Список дебютів — прокрути, щоб побачити інші', en: 'Opening list — scroll for more' },
@@ -213,10 +221,14 @@ const ui = {
   variantsAvailable: { uk: '{count} доступно', en: '{count} available' },
   randomVariation: { uk: '🎲 Випадковий із {count}', en: '🎲 Random from {count}' },
   mode: { uk: 'Режим', en: 'Mode' },
-  surprises: { uk: 'Несподівані варіанти', en: 'Surprise variations' },
-  surprisesDetail: { uk: 'Stockfish перевірятиме різними продовженнями', en: 'Stockfish will use different continuations' },
+  surprises: { uk: 'Несподівані відповіді', en: 'Surprise replies' },
+  surprisesDetail: { uk: 'Інші підготовлені відповіді в межах цього дебюту', en: 'Other prepared replies within this opening' },
+  surprisesScope: { uk: 'Працює лише у Практиці та Іспиті під час дебюту.', en: 'Works only in Practice and Exam during the opening.' },
+  surprisesExplanation: { uk: 'Якщо в курсі є інша відповідь, комп’ютер може перейти на інший варіант цього дебюту. Без галочки він дотримується обраного варіанта. Після дебюту грає Stockfish вибраної сили.', en: 'If the course has another reply, the computer may switch to another line in this opening. Uncheck this to keep your chosen line. After the opening, Stockfish plays at your selected strength.' },
+  surprisesPractice: { uk: 'Практика: перевіряє твій наступний хід за новим варіантом.', en: 'Practice: checks your next move against the new line.' },
+  surprisesExam: { uk: 'Іспит: перевіряє знання без підказок під час гри.', en: 'Exam: tests your knowledge without hints during play.' },
   opponentStrength: { uk: 'Сила суперника', en: 'Opponent strength' },
-  strengthDetail: { uk: '{value} · рейтинг і тренування', en: '{value} · rating and training' },
+  strengthDetail: { uk: '{value} · орієнтовна сила бота, не рейтинг Chess.com', en: '{value} · approximate bot strength, not a Chess.com rating' },
   startTraining: { uk: 'Почати тренування', en: 'Start training' },
   unlockPro: { uk: 'Відкрити Дебют Pro', en: 'Unlock Debut Pro' },
   installIphone: { uk: 'На iPhone: Safari → Поділитися → На початковий екран', en: 'On iPhone: Safari → Share → Add to Home Screen' },
@@ -263,8 +275,16 @@ const ui = {
   keepsEvaluation: { uk: 'Хід зберігає найкращу оцінку позиції.', en: 'This move keeps the best position evaluation.' },
   lostPawns: { uk: 'Втрачено приблизно {amount} пішака оцінки.', en: 'About {amount} pawns of evaluation lost.' },
   bestMove: { uk: 'Найкращий хід', en: 'Best move' },
+  sounds: { uk: 'Звуки гри', en: 'Game sounds' },
+  soundsDetail: { uk: 'Короткі клацання фігур', en: 'Short piece clicks' },
+  previewSound: { uk: 'Прослухати', en: 'Preview' },
   bestLine: { uk: 'Перша лінія:', en: 'Best line:' },
   replayLine: { uk: 'Переграти лінію', en: 'Replay line' },
+  playLine: { uk: 'Відтворити лінію', en: 'Play line' },
+  pauseLine: { uk: 'Призупинити лінію', en: 'Pause line' },
+  showConsequences: { uk: 'Показати наслідки', en: 'Show consequences' },
+  consequenceLine: { uk: 'Після твого ходу:', en: 'After your move:' },
+  strongestReply: { uk: 'Найсильніша відповідь', en: 'Strongest reply' },
   exitLine: { uk: 'Повернутися до партії', en: 'Return to game' },
   lineStart: { uk: 'Позиція до ходу', en: 'Position before move' },
   lineStep: { uk: 'Хід {current} із {total}', en: 'Move {current} of {total}' },
@@ -330,11 +350,6 @@ const modes: { id: Mode; name: UiKey; description: UiKey }[] = [
 ]
 const categories: { id: Category; name: UiKey }[] = [
   { id: 'beginner', name: 'beginner' }, { id: 'intermediate', name: 'intermediate' }, { id: 'advanced', name: 'advanced' },
-]
-const strengthOptions: { value: EngineStrength; label: UiKey }[] = [
-  { value: 800, label: 'beginner' }, { value: 1200, label: 'amateur' },
-  { value: 1600, label: 'club' }, { value: 1800, label: 'strongClub' },
-  { value: 2000, label: 'strong' }, { value: 3000, label: 'maximum' },
 ]
 const analysisLabels: AnalysisLabel[] = ['brilliant', 'best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder']
 
@@ -407,7 +422,10 @@ function buildOpeningBook(courseList: Course[]) {
 }
 
 function detectOpening(moves: string[], locale: Locale) {
+  const name = detectOpeningName(moves, locale)
+  if (name && !(locale === 'uk' && /^Дебют [A-E]\d{2}$/.test(name))) return name
   const key = detectOpeningKey(moves)
+  if (key === 'openingUnknown' && name) return name
   return key.startsWith('course:') ? getCatalog(locale).find((course) => course.id === key.slice(7))?.name ?? translate(locale, 'openingUnknown') : translate(locale, key as UiKey)
 }
 
@@ -507,9 +525,10 @@ function App() {
   const gameHistory = useRef<GameMoveRecord[]>([])
   const gameSession = useRef(0)
   const lastDropAt = useRef(0)
-  const audioContext = useRef<AudioContext | null>(null)
   const reviewMovesRef = useRef<HTMLDivElement | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
+  const [boardTheme, setBoardTheme] = useState(() => getBoardTheme(readJson<unknown>('board-appearance', 'classic')))
+  const boardColors = BOARD_THEMES[boardTheme]
   const [locale, setLocale] = useState<Locale>(() => {
     const saved = localStorage.getItem('locale')
     if (saved === 'uk' || saved === 'en') return saved
@@ -530,7 +549,8 @@ function App() {
   const [variantFilter, setVariantFilter] = useState<VariantFilter>('all')
   const [mode, setMode] = useState<Mode>('coach')
   const [surprises, setSurprises] = useState(true)
-  const [strength, setStrength] = useState<EngineStrength>(1200)
+  const [soundsEnabled, setSoundsEnabled] = useState(getChessSoundsEnabled)
+  const [strength, setStrength] = useState<EngineStrength>(600)
   const [scenario, setScenario] = useState<Scenario>(courses[0].scenarios[0])
   const [trainingColor, setTrainingColor] = useState<PlayerColor>('w')
   const [step, setStep] = useState(0)
@@ -547,6 +567,9 @@ function App() {
   const [freePlay, setFreePlay] = useState(false)
   const [manualOutcome, setManualOutcome] = useState<ManualOutcome>(null)
   const [strengthMenuOpen, setStrengthMenuOpen] = useState(false)
+  const strengthTrigger = useRef<HTMLButtonElement>(null)
+  const strengthMenu = useRef<HTMLDivElement>(null)
+  const [strengthMenuStyle, setStrengthMenuStyle] = useState<CSSProperties>()
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [analysisSummaryOpen, setAnalysisSummaryOpen] = useState(false)
   const [analysisBusy, setAnalysisBusy] = useState(false)
@@ -555,6 +578,9 @@ function App() {
   const [analysisItems, setAnalysisItems] = useState<AnalysedMove[]>([])
   const [analysisIndex, setAnalysisIndex] = useState(0)
   const [variationPly, setVariationPly] = useState<number | null>(null)
+  const [variationKind, setVariationKind] = useState<'best' | 'consequence'>('best')
+  const [variationPlaying, setVariationPlaying] = useState(false)
+  const variationTimer = useRef<number | null>(null)
   const [variationEvaluation, setVariationEvaluation] = useState<{ fen: string; cp: number | null } | null>(null)
   const [promotion, setPromotion] = useState<{ from: Square; to: Square } | null>(null)
   const promotionDialog = useRef<HTMLDialogElement>(null)
@@ -567,24 +593,30 @@ function App() {
   const t = (key: UiKey, values?: Record<string, string | number>) => translate(locale, key, values)
   const colorName = (color: PlayerColor) => t(color === 'w' ? 'white' : 'black')
   const savedRating = readJson<RatingResult | null>(ratingKey, null)
-  const localizedCourses = getCourses(locale)
-  const availableCourses = [...localizedCourses, ...(previewCourses?.[locale] ?? premiumCourses)]
+  const localizedCourses = useMemo(() => getCourses(locale), [locale])
+  const availableCourses = useMemo(() => [...localizedCourses, ...(previewCourses?.[locale] ?? premiumCourses)], [localizedCourses, locale, premiumCourses])
   const catalogUnlocked = premium || previewCourses !== null
   const catalog = getCatalog(locale)
   const selectedEntry = catalog.find((course) => course.id === selectedCourseId) ?? catalog[0]
   const selectedLesson = availableCourses.find((course) => course.id === selectedCourseId)
   const selectedCourse = selectedLesson ?? localizedCourses[0]
-  const unconventionalIds = new Set(['bird', 'grob', 'larsen', 'polish', 'kings-gambit', 'budapest', 'benko-gambit'])
-  const visibleCourses = catalog.filter((course) => unconventionalOnly ? unconventionalIds.has(course.id) : course.category === category)
-  const openingBook = useMemo(() => buildOpeningBook(availableCourses), [locale, premiumCourses])
+  const unconventionalIds = new Set(['bird', 'grob', 'larsen', 'polish', 'kings-gambit', 'budapest', 'benko-gambit', 'danish', 'stafford', 'owens', 'alekhine', 'trompowsky', 'marshall-attack'])
+  const visibleCourses = catalog.filter((course) => course.category === category && (!unconventionalOnly || unconventionalIds.has(course.id)))
+  const openingBook = useMemo(() => buildOpeningBook(availableCourses), [availableCourses])
 
   const activeScenario = (trainingColor === 'w' ? selectedCourse.scenarios : selectedCourse.blackScenarios).find((item) => item.id === scenario.id) ?? scenario
   const current = activeScenario.steps[step]
+  const trainingReplies = useMemo(() => buildTrainingReplies(selectedCourse, trainingColor), [selectedCourse, trainingColor])
   const progress = Math.min(100, Math.round((step / activeScenario.steps.length) * 100))
   const hint = screen === 'train' && current && (mode === 'coach' || practiceCorrection) ? moveParts(current.userMove) : null
   const playerSide = screen === 'rating' ? playerColor : trainingColor
   const gameFinished = Boolean(manualOutcome) || game.current.isGameOver()
   const analysedMove = analysisItems[Math.max(0, analysisIndex)]
+  const replayConsequences = variationPly !== null && variationKind === 'consequence'
+  const variationUci = replayConsequences ? analysedMove?.consequenceVariationUci : analysedMove?.principalVariationUci
+  const variationSan = replayConsequences ? analysedMove?.consequenceVariationSan : analysedMove?.principalVariationSan
+  const variationFens = replayConsequences ? analysedMove?.consequenceVariationFens : analysedMove?.principalVariationFens
+  const canShowConsequences = analysedMove && !analysedMove.bookMove && ['inaccuracy', 'mistake', 'blunder'].includes(analysedMove.label) && analysedMove.consequenceVariationUci.length > 0
   const analysisOpeningName = analysedMove ? detectOpening(analysisItems.slice(0, analysisIndex + 1).map((item) => item.uci), locale) : ''
   const analysisOpeningNote = analysisIndex < 0 ? '' : analysedMove?.openingNote?.kind === 'f7' ? t('f7Idea')
     : analysedMove?.openingNote?.kind === 'deviation' ? t('expectedMove', {
@@ -592,25 +624,29 @@ function App() {
       explanation: activeScenario.steps[analysedMove.openingNote.stepIndex]?.explanation ?? '',
     }) : ''
   const displayedFen = analysisOpen && analysedMove
-    ? analysisIndex < 0 ? analysedMove.fenBefore : variationPly === null ? analysedMove.fenAfter : analysedMove.principalVariationFens[variationPly] ?? analysedMove.fenAfter
+    ? analysisIndex < 0 ? analysedMove.fenBefore : variationPly === null ? analysedMove.fenAfter : variationFens?.[variationPly] ?? analysedMove.fenAfter
     : fen
   const displayedBadge = analysisOpen && analysedMove
     ? analysisIndex < 0 ? null : variationPly === null ? badgeForAnalysis(analysedMove, locale) : null
     : moveBadge
   const displayedLastMove = analysisOpen && analysedMove
     ? analysisIndex < 0 ? null : variationPly === null ? { from: analysedMove.from, to: analysedMove.to }
-      : variationPly > 0 ? moveParts(analysedMove.principalVariationUci[variationPly - 1]) : null
+      : variationPly > 0 ? moveParts(variationUci![variationPly - 1]) : null
     : lastMove
+  // The recommendation belongs to the position before the reviewed move.
+  // Keep it visible over the played position; replay still restores fenBefore.
+  const reviewArrow = analysisIndex >= 0 ? variationUci?.[variationPly ?? 0] : undefined
   const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
   const opponentAnalysis = analysisItems.filter((item) => item.color !== playerSide)
-  const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(playerAnalysis)) : 0
-  const opponentAccuracy = opponentAnalysis.length ? Math.round(gameAccuracy(opponentAnalysis)) : 0
+  const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(analysisItems, playerSide)) : 0
+  const opponentAccuracy = opponentAnalysis.length ? Math.round(gameAccuracy(analysisItems, playerSide === 'w' ? 'b' : 'w')) : 0
   const playerScore = manualOutcome === 'resigned' ? 0 : manualOutcome === 'draw-agreed' || game.current.isDraw() ? .5 : game.current.isCheckmate() ? (game.current.turn() === playerSide ? 0 : 1) : .5
   const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore, playerAnalysis.filter((item) => !item.bookMove).length)
   const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
   const bookMoveCount = playerAnalysis.filter((item) => item.bookMove).length
   const resultTitle = t(playerScore === 1 ? 'victory' : playerScore === .5 ? 'draw' : 'defeat')
   const displayedPosition = useMemo(() => new Chess(displayedFen), [displayedFen])
+  const variationFinished = variationPly !== null && (variationPly >= (variationUci?.length ?? 0) || displayedPosition.isGameOver())
   const checkedKingSquare = displayedPosition.isCheck() ? kingSquare(displayedPosition, displayedPosition.turn()) : null
   const finalBoard = !analysisOpen || (variationPly === null && analysisIndex === analysisItems.length - 1)
   const resultLoser = getResultLoser(displayedPosition, manualOutcome === 'resigned', playerSide, finalBoard)
@@ -623,7 +659,7 @@ function App() {
     {mateWinnerSquare && <KingResultBadge key={`win-${mateWinnerSquare}`} kind="win" label={winnerLabel} style={badgePosition(mateWinnerSquare, playerSide)} />}
   </>
   const currentEvaluation = analysisIndex < 0 ? analysedMove?.beforeEvaluationCp ?? 0 : analysedMove?.evaluationCp ?? 0
-  const visibleEvaluation = variationPly === null ? currentEvaluation : variationPly === 0 ? analysedMove?.beforeEvaluationCp ?? null : variationEvaluation?.fen === displayedFen ? variationEvaluation.cp : null
+  const visibleEvaluation = variationPly === null ? currentEvaluation : variationPly === 0 ? (replayConsequences ? analysedMove?.evaluationCp : analysedMove?.beforeEvaluationCp) ?? null : variationEvaluation?.fen === displayedFen ? variationEvaluation.cp : null
   const variationEvaluationFailed = variationEvaluation?.fen === displayedFen && variationEvaluation.cp === null
   const evaluationWhite = visibleEvaluation === null ? 50 : Math.abs(visibleEvaluation) >= 9000 ? (visibleEvaluation > 0 ? 100 : 0) : Math.max(5, Math.min(95, winPercent(visibleEvaluation)))
   const graphPoints = analysisItems.map((item, index) => {
@@ -632,11 +668,11 @@ function App() {
     return { x, y, item }
   })
   const graphPath = graphPoints.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ')
-  const materialMoves = analysisOpen && analysedMove ? analysisItems.slice(0, analysisIndex + (variationPly === null ? 1 : 0)) : gameHistory.current
+  const materialMoves = analysisOpen && analysedMove ? analysisItems.slice(0, analysisIndex + (variationPly === null || replayConsequences ? 1 : 0)) : gameHistory.current
   const variationCaptures: { color: PlayerColor; captured?: Move['captured'] }[] = []
   if (analysisOpen && analysedMove && variationPly !== null) {
-    const position = new Chess(analysedMove.fenBefore)
-    for (const uci of analysedMove.principalVariationUci.slice(0, variationPly)) {
+    const position = new Chess(variationFens![0])
+    for (const uci of variationUci!.slice(0, variationPly)) {
       const move = moveParts(uci)
       const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
       variationCaptures.push({ color: played.color, captured: played.captured })
@@ -651,25 +687,100 @@ function App() {
   const playerMaterialAdvantage = playerSide === 'w' ? whiteAdvantage : blackAdvantage
   const opponentMaterialAdvantage = playerSide === 'w' ? blackAdvantage : whiteAdvantage
 
+  useLayoutEffect(() => {
+    const trigger = strengthTrigger.current
+    const menu = strengthMenu.current
+    if (!strengthMenuOpen || !trigger || !menu) return
+    const viewport = window.visualViewport
+    const positionMenu = (event?: Event) => {
+      if (event?.target instanceof Node && menu.contains(event.target)) return
+      const bounds = trigger.getBoundingClientRect()
+      const top = viewport?.offsetTop ?? 0
+      const height = viewport?.height ?? window.innerHeight
+      if (bounds.bottom < top || bounds.top > top + height) {
+        setStrengthMenuOpen(false)
+        return
+      }
+      // Match the shell's existing safe-area padding without moving the card.
+      const shell = getComputedStyle(trigger.closest('main')!)
+      const insetTop = Math.max(12, parseFloat(shell.paddingTop) || 0)
+      const insetBottom = Math.max(12, parseFloat(shell.paddingBottom) || 0)
+      setStrengthMenuStyle(getDropdownPlacement(bounds, {
+        top: top + insetTop - 12, left: viewport?.offsetLeft ?? 0,
+        width: viewport?.width ?? window.innerWidth,
+        height: height - insetTop - insetBottom + 24,
+      }, menu.scrollHeight + 2))
+    }
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !trigger.contains(event.target) && !menu.contains(event.target)) setStrengthMenuOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setStrengthMenuOpen(false); trigger.focus() }
+    }
+    positionMenu()
+    document.addEventListener('scroll', positionMenu, true)
+    window.addEventListener('resize', positionMenu)
+    viewport?.addEventListener('resize', positionMenu)
+    viewport?.addEventListener('scroll', positionMenu)
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('scroll', positionMenu, true)
+      window.removeEventListener('resize', positionMenu)
+      viewport?.removeEventListener('resize', positionMenu)
+      viewport?.removeEventListener('scroll', positionMenu)
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [strengthMenuOpen, locale])
+
   useEffect(() => {
     engine.current = new StockfishEngine()
     return () => engine.current?.destroy()
   }, [])
 
+  useEffect(() => { window.scrollTo(0, 0) }, [screen])
+
+  useEffect(() => {
+    try { localStorage.setItem('board-appearance', JSON.stringify(boardTheme)) } catch { /* Storage may be unavailable in private browsing. */ }
+  }, [boardTheme])
+
+  useEffect(() => {
+    document.addEventListener('pointerdown', unlockChessSounds, { passive: true })
+    document.addEventListener('keydown', unlockChessSounds)
+    return () => {
+      document.removeEventListener('pointerdown', unlockChessSounds)
+      document.removeEventListener('keydown', unlockChessSounds)
+      disposeChessSounds()
+    }
+  }, [])
+
   useEffect(() => {
     if (!analysisOpen || analysisBusy || variationPly === null || variationPly === 0) return
-    const cached = analysisItems.find((item) => item.fenAfter === displayedFen || item.fenBefore === displayedFen)
-    if (cached) {
-      setVariationEvaluation({ fen: displayedFen, cp: cached.fenAfter === displayedFen ? cached.evaluationCp : cached.beforeEvaluationCp })
-      return
-    }
     const reviewer = new StockfishEngine()
     let cancelled = false
-    void reviewer.analyse(displayedFen, 3000, 300).then((result) => {
+    const history: EngineHistory = {
+      initialFen: analysisItems[0].fenBefore,
+      moves: [...analysisItems.slice(0, analysisIndex + (replayConsequences ? 1 : 0)).map((move) => move.uci), ...variationUci!.slice(0, variationPly)],
+    }
+    void reviewer.analyse(displayedFen, 3000, 300, history).then((result) => {
       if (!cancelled) setVariationEvaluation({ fen: displayedFen, cp: new Chess(displayedFen).turn() === 'w' ? result.scoreCp : -result.scoreCp })
     }).catch(() => { if (!cancelled) setVariationEvaluation({ fen: displayedFen, cp: null }) }).finally(() => reviewer.destroy())
     return () => { cancelled = true; reviewer.destroy() }
-  }, [analysisOpen, analysisBusy, displayedFen, variationPly, analysisItems])
+  }, [analysisOpen, analysisBusy, displayedFen, variationPly, variationKind, analysisIndex, analysisItems])
+
+  useEffect(() => {
+    if (!variationPlaying || !analysisOpen || analysisBusy || analysisSummaryOpen || variationPly === null) return
+    if (variationFinished) { setVariationPlaying(false); return }
+    variationTimer.current = window.setTimeout(() => {
+      variationTimer.current = null
+      stepVariation(variationPly + 1, true)
+    }, 1000)
+    return () => {
+      if (variationTimer.current !== null) window.clearTimeout(variationTimer.current)
+      variationTimer.current = null
+    }
+  }, [analysisOpen, analysisBusy, analysisSummaryOpen, analysisIndex, variationPly, variationKind, variationPlaying, variationFinished])
 
   useEffect(() => {
     if (promotion && !promotionDialog.current?.open) promotionDialog.current?.showModal()
@@ -757,58 +868,39 @@ function App() {
     engine.current = new StockfishEngine()
   }
 
-  function playSound(kind: 'move' | 'capture' | 'check' | 'mate') {
-    try {
-      const context = audioContext.current ?? new AudioContext()
-      audioContext.current = context
-      if (context.state === 'suspended') void context.resume()
-      const notes = kind === 'mate' ? [220, 165, 110] : kind === 'check' ? [520, 690] : kind === 'capture' ? [190, 130] : [260]
-      notes.forEach((frequency, index) => {
-        const oscillator = context.createOscillator()
-        const gain = context.createGain()
-        const start = context.currentTime + index * .075
-        oscillator.type = kind === 'move' ? 'sine' : 'triangle'
-        oscillator.frequency.setValueAtTime(frequency, start)
-        gain.gain.setValueAtTime(.0001, start)
-        gain.gain.exponentialRampToValueAtTime(.12, start + .008)
-        gain.gain.exponentialRampToValueAtTime(.0001, start + .085)
-        oscillator.connect(gain).connect(context.destination)
-        oscillator.start(start)
-        oscillator.stop(start + .09)
-      })
-    } catch {
-      // Sound is optional when iOS blocks Web Audio before a user gesture.
-    }
-  }
-
   function playMoveSound(played: Move) {
-    playSound(game.current.isCheckmate() ? 'mate' : game.current.isCheck() ? 'check' : played.captured ? 'capture' : 'move')
+    playSound(game.current.isCheckmate() ? 'mate' : game.current.isDraw() ? 'draw' : game.current.isCheck() ? 'check' : played.captured ? 'capture' : 'move')
   }
 
-  async function analyseSafely(position: string, engineStrength: EngineStrength, moveTime: number) {
+  function gameEngineHistory(): EngineHistory {
+    return { initialFen: gameHistory.current[0]?.fenBefore ?? new Chess().fen(), moves: gameHistory.current.map((move) => move.uci) }
+  }
+
+  async function analyseSafely(position: string, engineStrength: EngineStrength, moveTime: number, history?: EngineHistory) {
     if (!engine.current) throw new Error(t('stockfishNotStarted'))
     const activeEngine = engine.current
     try {
-      return await activeEngine.analyse(position, engineStrength, moveTime)
+      return await activeEngine.analyse(position, engineStrength, moveTime, history)
     } catch {
       if (engine.current !== activeEngine) throw new Error('Stockfish search was stopped')
       restartEngine()
-      return await engine.current!.analyse(position, engineStrength, moveTime)
+      return await engine.current!.analyse(position, engineStrength, moveTime, history)
     }
   }
 
   async function bestMoveSafely(position: string, engineStrength: EngineStrength) {
     if (!engine.current) throw new Error(t('stockfishNotStarted'))
     const activeEngine = engine.current
-    try { return await activeEngine.bestMove(position, engineStrength) }
+    try { return await activeEngine.bestMove(position, engineStrength, gameEngineHistory()) }
     catch {
       if (engine.current !== activeEngine) throw new Error('Stockfish search was stopped')
       restartEngine()
-      return await engine.current!.bestMove(position, engineStrength)
+      return await engine.current!.bestMove(position, engineStrength, gameEngineHistory())
     }
   }
 
   function resetGameState() {
+    stopVariationPlayback()
     gameSession.current += 1
     restartEngine()
     gameHistory.current = []
@@ -835,6 +927,7 @@ function App() {
   }
 
   function cancelAnalysis() {
+    stopVariationPlayback()
     gameSession.current += 1
     restartEngine()
     setAnalysisBusy(false)
@@ -844,19 +937,46 @@ function App() {
   }
 
   function selectAnalysisMove(index: number) {
+    stopVariationPlayback()
     setAnalysisIndex(index)
     setVariationPly(null)
   }
 
-  function stepVariation(next: number) {
-    if (!analysedMove || next < 0 || next >= analysedMove.principalVariationFens.length) return
+  function stopVariationPlayback() {
+    if (variationTimer.current !== null) window.clearTimeout(variationTimer.current)
+    variationTimer.current = null
+    setVariationPlaying(false)
+  }
+
+  function startVariation(kind: 'best' | 'consequence') {
+    stopVariationPlayback()
+    setVariationKind(kind)
+    setVariationPly(0)
+    setVariationPlaying(true)
+  }
+
+  function toggleVariationPlayback() {
+    if (variationPlaying) { stopVariationPlayback(); return }
+    if (variationFinished) setVariationPly(0)
+    setVariationPlaying(true)
+  }
+
+  function exitVariation() {
+    stopVariationPlayback()
+    setVariationPly(null)
+  }
+
+  function stepVariation(next: number, autoplay = false) {
+    if (!autoplay) stopVariationPlayback()
+    if (!analysedMove || !variationFens || next < 0 || next >= variationFens.length) return
     if (variationPly !== null && next === variationPly + 1) {
-      const move = moveParts(analysedMove.principalVariationUci[variationPly])
-      const position = new Chess(analysedMove.principalVariationFens[variationPly])
+      const move = moveParts(variationUci![variationPly])
+      const position = new Chess(variationFens[variationPly])
       const played = position.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' })
       playSound(position.isCheckmate() ? 'mate' : position.isCheck() ? 'check' : played.captured ? 'capture' : 'move')
     }
     setVariationPly(next)
+    if (next >= variationUci!.length || new Chess(variationFens[next]).isGameOver()) stopVariationPlayback()
   }
 
   function recordMove(beforeFen: string, played: Move, actor: MoveActor, openingNote?: GameMoveRecord['openingNote'], explanation?: string) {
@@ -872,7 +992,7 @@ function App() {
       captured: played.captured,
       fenBefore: beforeFen,
       fenAfter: game.current.fen(),
-      bookMove: openingBook.has(`${positionKey(beforeFen)}|${uci}`),
+      bookMove: openingBook.has(`${positionKey(beforeFen)}|${uci}`) || isKnownBookMove(beforeFen, uci),
       openingName: detectOpening([...gameHistory.current.map((move) => move.uci), uci], locale),
       openingNote,
       openingExplanation: explanation ?? (actor === 'player' && current?.userMove === uci ? current.explanation
@@ -909,7 +1029,7 @@ function App() {
     const source = trainingColor === 'w' ? course.scenarios : course.blackScenarios
     const allChoices = source as Scenario[]
     const choices = variantFilter === 'all' ? allChoices : allChoices.filter((item) => scenarioVariant(item) === variantFilter)
-    const selectedScenario = variantFilter === 'all' || surprises ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
+    const selectedScenario = variantFilter === 'all' ? choices[Math.floor(Math.random() * choices.length)] : choices[0]
     game.current.reset()
     resetGameState()
     setScenario(selectedScenario)
@@ -1041,7 +1161,7 @@ function App() {
     setFen(game.current.fen())
 
     const uci = `${played.from}${played.to}${played.promotion ?? ''}`
-    const isBookMove = openingBook.has(`${positionKey(beforeFen)}|${uci}`)
+    const isBookMove = openingBook.has(`${positionKey(beforeFen)}|${uci}`) || isKnownBookMove(beforeFen, uci)
     if (screen === 'rating') {
       recordMove(beforeFen, played, 'player')
       void evaluateRatingMove(beforeFen, game.current.fen())
@@ -1058,7 +1178,7 @@ function App() {
       return true
     }
 
-    setMoveBadge(isBookMove
+    setMoveBadge(mode === 'exam' ? null : isBookMove
       ? { square: played.to, symbol: '📖', label: t('theory'), tone: 'theory' }
       : { square: played.to, symbol: '↗', label: t('departure'), tone: 'departure' })
 
@@ -1066,7 +1186,7 @@ function App() {
       if (mode === 'exam') {
         recordMove(beforeFen, played, 'player', { kind: 'deviation', stepIndex: step })
         setFreePlay(true)
-        setFeedback(t('outsideExam'))
+        setFeedback('')
         void requestEngineMove()
         return true
       }
@@ -1106,10 +1226,11 @@ function App() {
     setEngineFailure(null)
     setFeedback(t('evaluatingMove'))
     try {
-      const before = await analyseSafely(beforeFen, 3000, 360)
+      const afterHistory = gameEngineHistory()
+      const before = await analyseSafely(beforeFen, 3000, 360, { ...afterHistory, moves: afterHistory.moves.slice(0, -1) })
       const after = game.current.isThreefoldRepetition()
         ? { bestMove: null, scoreCp: 0, principalVariation: [] }
-        : await analyseSafely(afterFen, 3000, 360)
+        : await analyseSafely(afterFen, 3000, 360, afterHistory)
       if (session !== gameSession.current) return
       const cpLoss = Math.max(0, Math.min(1000, before.scoreCp + after.scoreCp))
       const winDrop = Math.max(0, winPercent(before.scoreCp) - winPercent(-after.scoreCp))
@@ -1138,7 +1259,7 @@ function App() {
       color: playerColor,
       opponent: strength,
       score: game.current.isDraw() ? .5 : game.current.turn() === playerColor ? 0 : 1,
-      accuracy: gameAccuracy(moves),
+      accuracy: sampleAccuracy(moves),
       moves: moves.length,
       seriousErrors: moves.filter((move) => move.winDrop >= 6 || move.cpLoss >= 100).length,
       blunders: moves.filter((move) => move.winDrop >= 12 || move.cpLoss >= 200).length,
@@ -1174,8 +1295,21 @@ function App() {
   }
 
   function playCourseReply(lesson: LessonStep) {
+    let replyStep = step
+    let replyScenario = activeScenario
+    const choices = surprises && mode !== 'coach' ? trainingReplies.get(positionKey(game.current.fen())) : undefined
+    if (choices?.length) {
+      const choice = choices[Math.floor(Math.random() * choices.length)]
+      const alternative = choice.scenario.steps[choice.stepIndex]
+      if (alternative.opponentMove !== lesson.opponentMove) {
+        lesson = alternative
+        replyStep = choice.stepIndex
+        replyScenario = choice.scenario
+        setScenario(choice.scenario)
+      }
+    }
     if (!lesson.opponentMove) {
-      setStep(step + 1)
+      setStep(replyStep + 1)
       setFreePlay(true)
       setThinking(false)
       setFeedback(mode === 'exam' ? '' : t('openingDone', { explanation: lesson.explanation }))
@@ -1186,14 +1320,14 @@ function App() {
     const beforeFen = game.current.fen()
     const played = game.current.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' })
     playMoveSound(played)
-    recordMove(beforeFen, played, 'course')
+    recordMove(beforeFen, played, 'course', undefined, lesson.opponentExplanation)
     setLastMove({ from: reply.from, to: reply.to })
     setMoveBadge(null)
     setFen(game.current.fen())
     setThinking(false)
 
-    const next = step + 1
-    if (next >= activeScenario.steps.length) {
+    const next = replyStep + 1
+    if (next >= replyScenario.steps.length) {
       setStep(next)
       setFreePlay(true)
       setFeedback(mode === 'exam' ? '' : t('openingDone', { explanation: lesson.opponentExplanation }))
@@ -1285,28 +1419,36 @@ function App() {
   }
 
   function resignGame() {
-    if (screen === 'rating' || !freePlay || gameFinished || thinking) return
+    if (screen === 'rating' || gameFinished || thinking) return
     gameSession.current += 1
     setThinking(false)
     setSelected(null)
     setLegalTargets([])
+    setPracticeDeviation(false)
+    setPracticeCorrection(false)
+    setMoveBadge(null)
     setManualOutcome('resigned')
+    playSound('defeat')
     setFeedback(t('resignedFeedback'))
   }
 
   async function offerDraw() {
-    if (screen === 'rating' || !freePlay || gameFinished || thinking || game.current.turn() !== trainingColor) return
+    if (screen === 'rating' || gameFinished || thinking || game.current.turn() !== trainingColor) return
     const session = gameSession.current
     setThinking(true)
     setFeedback(t('drawThinking'))
     try {
-      const result = await analyseSafely(game.current.fen(), 3000, 300)
+      const result = await analyseSafely(game.current.fen(), 3000, 300, gameEngineHistory())
       if (session !== gameSession.current) return
       setThinking(false)
       if (game.current.isDraw() || Math.abs(result.scoreCp) <= 100) {
         gameSession.current += 1
         restartEngine()
+        setPracticeDeviation(false)
+        setPracticeCorrection(false)
+        setMoveBadge(null)
         setManualOutcome('draw-agreed')
+        playSound('draw')
         setFeedback(t('drawAccepted'))
       } else {
         setFeedback(t('drawDeclined'))
@@ -1322,6 +1464,7 @@ function App() {
     if (!canReview) { setPaywallOpen(true); return }
     const records = [...gameHistory.current]
     if (!records.length || analysisBusy) return
+    stopVariationPlayback()
     const session = gameSession.current
     setAnalysisOpen(true)
     setAnalysisSummaryOpen(false)
@@ -1357,15 +1500,15 @@ function App() {
   const languagePicker = <div className="language-picker" role="group" aria-label="Language / Мова"><button className={locale === 'uk' ? 'active' : ''} onClick={() => void changeLocale('uk')} aria-pressed={locale === 'uk'}>Українська</button><button className={locale === 'en' ? 'active' : ''} onClick={() => void changeLocale('en')} aria-pressed={locale === 'en'}>English</button></div>
 
   if (privacyOpen) {
-    return <main className="privacy-screen"><header className="paywall-header"><button className="icon-button" onClick={() => setPrivacyOpen(false)} aria-label={t('back')}>←</button><strong>{t('privacyPolicy')}</strong><span /></header><iframe title={t('privacyPolicy')} src={`${import.meta.env.BASE_URL}privacy.html#${locale}`} /></main>
+    return <main className="privacy-screen"><header className="paywall-header"><button className="icon-button" onClick={() => setPrivacyOpen(false)} aria-label={t('back')}><UiIcon name="arrow-left" /></button><strong>{t('privacyPolicy')}</strong><span /></header><iframe title={t('privacyPolicy')} src={`${import.meta.env.BASE_URL}privacy.html#${locale}`} /></main>
   }
 
   if (paywallOpen) {
     return (
       <main className="paywall-screen">
         <header className="paywall-header"><button className="icon-button" onClick={() => setPaywallOpen(false)} aria-label={t('close')}>×</button><strong>{t('debut')} Pro</strong><span /></header>
-        <div className="paywall-hero"><PieceIcon type="q" color="w" /><h1>{t('reviewProTitle')}</h1><p>{t('reviewProDescription')}</p></div>
-        <div className="paywall-benefits"><div><PieceIcon type="p" color="w" /> <span>{t('proBenefitCatalog')}</span></div><div><PieceIcon type="r" color="w" /> <span>{t('proBenefitReview')}</span></div><div><PieceIcon type="b" color="w" /> <span>{t('proBenefitLines')}</span></div></div>
+        <div className="paywall-hero"><PieceIcon type="q" color="w" /><h1>{t('reviewProTitle')}</h1><p>{t('reviewProDescription', { count: catalog.filter((course) => course.access === 'premium').length })}</p></div>
+        <div className="paywall-benefits"><div><PieceIcon type="p" color="w" /> <span>{t('proBenefitCatalog', { count: catalog.length })}</span></div><div><PieceIcon type="r" color="w" /> <span>{t('proBenefitReview')}</span></div><div><PieceIcon type="b" color="w" /> <span>{t('proBenefitLines')}</span></div></div>
         {isNativeIOS() ? <>
           <div className="paywall-products">
             {products.map((product) => <button key={product.id} disabled={purchaseBusy} onClick={() => void buyPremium(product.id)}><span><strong>{product.displayName}</strong><small>{t(product.id.endsWith('yearly') ? 'yearly' : 'monthly')}</small></span><b>{product.displayPrice}</b></button>)}
@@ -1380,30 +1523,47 @@ function App() {
     )
   }
 
-  if (screen === 'home') {
+  if (screen === 'home' || screen === 'openings') {
     return (
-      <main className="shell home">
-        <header className="game-hero">
-          <div className="brand-mark"><img src={`${import.meta.env.BASE_URL}icon-192-v4.png`} alt="" /></div>
-          <div><span className="eyebrow">{t('brand')}</span><h1>{t('debut')}</h1></div>
-          <div className="rating-badge"><small>{t('level')}</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
-        </header>
+      <main className={`shell ${screen === 'home' ? 'home' : 'openings-menu'}`}>
+        {screen === 'home' ? <>
+          <header className="game-hero">
+            <div className="brand-mark"><PieceIcon type="n" color="w" /></div>
+            <div><span className="eyebrow">{t('brand')}</span><h1>{t('debut')}</h1></div>
+            <div className="rating-badge"><small>{t('level')}</small><strong>{savedRating ? `≈${savedRating.center}` : '—'}</strong></div>
+          </header>
 
-        {languagePicker}
+          {languagePicker}
 
-        {!nativeIOS && import.meta.env.PROD && <div className="pwa-status" role="status"><span>{t(pwaStatus === 'pending' ? 'offlinePending' : pwaStatus === 'ready' ? 'offlineReady' : pwaStatus === 'update' ? 'updateReady' : 'offlineFailed')}</span>{(pwaStatus === 'update' || pwaStatus === 'error') && <button onClick={() => void applyPwaUpdate()}>{t(pwaStatus === 'update' ? 'updateApp' : 'retry')}</button>}</div>}
+          {!nativeIOS && import.meta.env.PROD && <div className="pwa-status" role="status"><span>{t(pwaStatus === 'pending' ? 'offlinePending' : pwaStatus === 'ready' ? 'offlineReady' : pwaStatus === 'update' ? 'updateReady' : 'offlineFailed')}</span>{(pwaStatus === 'update' || pwaStatus === 'error') && <button onClick={() => void applyPwaUpdate()}>{t(pwaStatus === 'update' ? 'updateApp' : 'retry')}</button>}</div>}
 
-        <section className="play-menu">
-          <button className="play-card rating-play" onClick={() => startRating('w')}>
-            <span className="play-icon"><PieceIcon type="p" color="w" /></span>
-            <span><strong>{t(savedRating ? 'ratingRepeat' : 'ratingDiscover')}</strong><small>{t(savedRating ? 'ratingRepeatDetail' : 'ratingDiscoverDetail')}</small></span>
-            <b>→</b>
-          </button>
-          <div className="play-card lesson-play">
-            <span className="play-icon"><MoveIcon symbol="📖" /></span>
-            <span><strong>{t('openingTraining')}</strong><small>{t('trainingDetail')}</small></span>
-          </div>
-        </section>
+          <section className="play-menu">
+            <button className="play-card rating-play" onClick={() => startRating('w')}>
+              <span className="play-icon"><UiIcon name="gauge" /></span>
+              <span><strong>{t(savedRating ? 'ratingRepeat' : 'ratingDiscover')}</strong><small>{t(savedRating ? 'ratingRepeatDetail' : 'ratingDiscoverDetail')}</small></span>
+              <UiIcon name="arrow-right" />
+            </button>
+            <button className="play-card lesson-play" onClick={() => setScreen('openings')}>
+              <span className="play-icon"><UiIcon name="graduation-cap" /></span>
+              <span><strong>{t('openingTraining')}</strong><small>{t('trainingDetail')}</small></span>
+              <UiIcon name="arrow-right" />
+            </button>
+          </section>
+
+          <section className="board-appearance" aria-labelledby="board-appearance-title">
+            <h2 id="board-appearance-title">{t('boardAppearance')}</h2>
+            <div className="board-theme-options">
+              {(Object.keys(BOARD_THEMES) as BoardTheme[]).map((theme) => <button key={theme} aria-pressed={boardTheme === theme} onClick={() => setBoardTheme(theme)}>
+                <span className="board-theme-swatch" aria-hidden="true" style={{ '--board-light': BOARD_THEMES[theme].light, '--board-dark': BOARD_THEMES[theme].dark } as CSSProperties}><span /><span /><span /><span /></span>
+                <strong>{t(theme)}</strong>
+              </button>)}
+            </div>
+          </section>
+        </> : <>
+          <header className="menu-header">
+            <button className="icon-button" onClick={() => { setStrengthMenuOpen(false); setScreen('home') }} aria-label={t('back')}><UiIcon name="arrow-left" /></button>
+            <h1>{t('openingTraining')}</h1>
+          </header>
 
         <section>
           <div className="section-title">
@@ -1413,8 +1573,7 @@ function App() {
           <div className="category-tabs">
             {categories.map((item) => <button className={category === item.id ? 'active' : ''} onClick={() => {
               setCategory(item.id)
-              setUnconventionalOnly(false)
-              const first = catalog.find((course) => course.category === item.id)
+              const first = catalog.find((course) => course.category === item.id && (!unconventionalOnly || unconventionalIds.has(course.id)))
               if (first) setSelectedCourseId(first.id)
               setVariantFilter('all')
             }} key={item.id}><strong>{t(item.name)}</strong><small>{catalog.filter((course) => course.category === item.id).length}</small></button>)}
@@ -1425,7 +1584,7 @@ function App() {
               if (id !== 'all') setTrainingColor(id === 'white' ? 'w' : 'b')
             }} key={id}>{t(label)}</button>)}
           </div>
-          <button className={`unconventional-filter ${unconventionalOnly ? 'active' : ''}`} aria-pressed={unconventionalOnly} onClick={() => { setUnconventionalOnly(!unconventionalOnly); setVariantFilter('all') }}>{locale === 'uk' ? 'Нестандартні дебюти й гамбіти' : 'Unconventional openings and gambits'}</button>
+          <button className={`unconventional-filter ${unconventionalOnly ? 'active' : ''}`} aria-pressed={unconventionalOnly} onClick={() => { const enabled = !unconventionalOnly; setUnconventionalOnly(enabled); const first = catalog.find((course) => course.category === category && (!enabled || unconventionalIds.has(course.id))); if (first) setSelectedCourseId(first.id); setVariantFilter('all') }}>{locale === 'uk' ? 'Нестандартні дебюти й гамбіти' : 'Unconventional openings and gambits'}</button>
           <div key={`${category}-${unconventionalOnly}`} className="opening-list" role="region" tabIndex={0} aria-label={t('openingList')}>
             {visibleCourses.map((course, index) => (
               <button className={`opening-card ${selectedEntry.id === course.id ? 'active' : ''} ${course.access === 'premium' && !catalogUnlocked ? 'locked' : ''}`} onClick={() => { setSelectedCourseId(course.id); setVariantFilter('all') }} key={course.id}>
@@ -1459,25 +1618,43 @@ function App() {
         </section>
 
         <section className="settings-card">
-          <label className="switch-row">
-            <span><strong>{t('surprises')}</strong><small>{t('surprisesDetail')}</small></span>
-            <input type="checkbox" checked={surprises} onChange={(event) => setSurprises(event.target.checked)} />
-          </label>
+          {mode !== 'coach' && <>
+            <label className="switch-row">
+              <span><strong id="surprises-label">{t('surprises')}</strong><small>{t('surprisesDetail')}</small></span>
+              <input type="checkbox" aria-labelledby="surprises-label" aria-describedby="surprises-help" checked={surprises} onChange={(event) => setSurprises(event.target.checked)} />
+            </label>
+            <div className="surprises-help" id="surprises-help">
+              <p>{t('surprisesScope')}</p>
+              <p>{t('surprisesExplanation')}</p>
+              <p className="surprises-mode">{t(mode === 'practice' ? 'surprisesPractice' : 'surprisesExam')}</p>
+            </div>
+          </>}
           <div className="strength-row">
             <span><strong>{t('opponentStrength')}</strong><small>{t('strengthDetail', { value: strength === 3000 ? t('maximum') : `≈ ${strength} Elo` })}</small></span>
             <div className="strength-picker">
-              <button className="strength-trigger" aria-expanded={strengthMenuOpen} onClick={() => setStrengthMenuOpen((open) => !open)}>
-                {t(strengthOptions.find((item) => item.value === strength)?.label ?? 'amateur')}
+              <button ref={strengthTrigger} className="strength-trigger" aria-haspopup="listbox" aria-controls="strength-options" aria-expanded={strengthMenuOpen} onClick={() => setStrengthMenuOpen((open) => !open)}>
+                {strength === 3000 ? t('maximum') : `≈ ${strength} Elo`}
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
               </button>
-              {strengthMenuOpen && <div className="strength-menu" role="listbox" aria-label={t('opponentStrength')}>
-                {strengthOptions.map((item) => <button role="option" aria-selected={strength === item.value} className={strength === item.value ? 'active' : ''} onClick={() => { setStrength(item.value); setStrengthMenuOpen(false) }} key={item.value}>{t(item.label)}<small>{item.value === 3000 ? 'MAX' : `${item.value} Elo`}</small></button>)}
+              {strengthMenuOpen && <div ref={strengthMenu} style={strengthMenuStyle} className="strength-menu" id="strength-options" role="listbox" aria-label={t('opponentStrength')}>
+                {ENGINE_STRENGTHS.map((value) => <button role="option" aria-selected={strength === value} className={strength === value ? 'active' : ''} onClick={() => { setStrength(value); setStrengthMenuOpen(false); strengthTrigger.current?.focus() }} key={value}>{value === 3000 ? t('maximum') : `≈ ${value} Elo`}{value === 3000 && <small>MAX</small>}</button>)}
               </div>}
             </div>
           </div>
+          <label className="switch-row sound-setting">
+            <span><strong id="sounds-label">{t('sounds')}</strong><small>{t('soundsDetail')}</small></span>
+            <input type="checkbox" aria-labelledby="sounds-label" checked={soundsEnabled} onChange={(event) => {
+              const next = event.target.checked
+              setSoundsEnabled(next)
+              setChessSoundsEnabled(next)
+              if (next) unlockChessSounds()
+            }} />
+          </label>
+          {soundsEnabled && <button className="sound-preview" onClick={() => { unlockChessSounds(); playSound('move') }}>{t('previewSound')}</button>}
         </section>
 
-        <button className="primary" disabled={!nativeIOS && !selectedLesson} onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !catalogUnlocked ? nativeIOS ? 'unlockPro' : 'comingSoon' : 'startTraining')} <span>→</span></button>
+        <button className="primary" disabled={!nativeIOS && !selectedLesson} onClick={() => void beginFromMenu()}>{t(selectedEntry.access === 'premium' && !catalogUnlocked ? nativeIOS ? 'unlockPro' : 'comingSoon' : 'startTraining')} <UiIcon name="arrow-right" /></button>
+        </>}
         {!nativeIOS && <><p className="install-note">{previewCourses ? (locale === 'uk' ? 'Приватний тест · усі підготовлені курси відкриті. Вступні курси ще доповнюються.' : 'Private test · all prepared courses unlocked. Introductory courses are still being expanded.') : t('pwaBeta')}</p><p className="install-note">{t('installIphone')}</p></>}
         <button className="privacy-link" onClick={() => setPrivacyOpen(true)}>{t('privacyPolicy')}</button>
       </main>
@@ -1492,7 +1669,7 @@ function App() {
     return (
       <main className="shell theory-screen">
         <header className="theory-header">
-          <button className="icon-button" onClick={() => setScreen('home')} aria-label={t('back')}>←</button>
+          <button className="icon-button" onClick={() => setScreen('openings')} aria-label={t('back')}><UiIcon name="arrow-left" /></button>
           <div><span className="eyebrow">{t('beforeGame', { color: colorName(trainingColor) })}</span><h1>{selectedCourse.name}</h1></div>
           <button className="skip-button" onClick={finishTheory}>{t('skip')}</button>
         </header>
@@ -1530,7 +1707,7 @@ function App() {
           <span />
         </header>
         <section className={`report-result ${playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'}`}>
-          <span className="result-crown">{playerScore === 1 ? '♔' : playerScore === .5 ? '½' : '♚'}</span>
+          <span className="result-icon"><GameResultIcon kind={playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'} /></span>
           <div><small>{t('analysisFinished')}</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome, locale)}</p></div>
         </section>
         <section className="report-rating">
@@ -1548,8 +1725,8 @@ function App() {
           </svg>
         </section>
         <section className="players-summary">
-          <div><span className="player-piece">{playerSide === 'w' ? '♔' : '♚'}</span><small>{t('youColor', { color: colorName(playerSide) })}</small><strong>{analysisAccuracy}%</strong></div>
-          <div><span className="player-piece">{playerSide === 'w' ? '♚' : '♔'}</span><small>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })}</small><strong>{opponentAccuracy}%</strong></div>
+          <div><span className="player-piece"><PieceIcon type="k" color={playerSide} /></span><small>{t('youColor', { color: colorName(playerSide) })}</small><strong>{analysisAccuracy}%</strong></div>
+          <div><span className="player-piece"><PieceIcon type="k" color={playerSide === 'w' ? 'b' : 'w'} /></span><small>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })}</small><strong>{opponentAccuracy}%</strong></div>
         </section>
         <section className="quality-report">
           <h2>{t('yourMoves')}</h2>
@@ -1595,16 +1772,15 @@ function App() {
                 : analysedMove.cpLoss <= 10
                 ? t('keepsEvaluation')
                 : t('lostPawns', { amount: (analysedMove.cpLoss / 100).toFixed(1) })}</p>
+              {!analysedMove.bookMove && analysedMove.mistakeExplanation[locale] && <p className="mistake-explanation">{analysedMove.mistakeExplanation[locale]}</p>}
               {analysedMove.bestMoveSan && (
                 <div className="review-best-line">
                   <span>{t('bestMove')} <strong>{analysedMove.bestMoveSan}</strong></span>
                   <p><b>{t('bestLine')}</b> {analysedMove.principalVariationSan.join(' ') || analysedMove.bestMoveSan}</p>
                 </div>
               )}
+              {replayConsequences && <p><b>{t('consequenceLine')}</b> {analysedMove.consequenceVariationSan.join(' ')}</p>}
               </>}
-              {analysisIndex >= 0 && analysedMove.principalVariationUci.length > 0 && (variationPly === null
-                ? <button className="line-toggle" onClick={() => stepVariation(0)}>{t('replayLine')} →</button>
-                : <div className="line-controls"><button onClick={() => stepVariation(variationPly - 1)} disabled={variationPly === 0} aria-label={t('previousLine')}>‹</button><span>{variationPly === 0 ? t('lineStart') : `${t('lineStep', { current: variationPly, total: analysedMove.principalVariationUci.length })} · ${analysedMove.principalVariationSan[variationPly - 1]}`}</span><button onClick={() => stepVariation(variationPly + 1)} disabled={variationPly >= analysedMove.principalVariationUci.length} aria-label={t('nextLine')}>›</button><button className="line-exit" onClick={() => setVariationPly(null)}>{t('exitLine')}</button></div>)}
               {analysisOpeningNote && <p className="opening-note">♟ {analysisOpeningNote}</p>}
             </section>
 
@@ -1626,11 +1802,15 @@ function App() {
               <div className="board-wrap review-board" aria-label={t('analysisBoard')}>
                 <Chessboard options={{
                   id: 'analysis-board',
+                  pieces: BOARD_PIECES,
+                  arrows: reviewArrow ? [{ startSquare: reviewArrow.slice(0, 2), endSquare: reviewArrow.slice(2, 4), color: replayConsequences ? 'rgba(237,131,47,.9)' : 'rgba(69,189,113,.9)' }] : [],
                   position: displayedFen,
                   boardOrientation: playerSide === 'b' ? 'black' : 'white',
                   boardStyle: { borderRadius: '8px', overflow: 'hidden' },
-                  lightSquareStyle: { backgroundColor: '#d8cfb6' },
-                  darkSquareStyle: { backgroundColor: '#6f8b7e' },
+                  lightSquareStyle: { backgroundColor: boardColors.light },
+                  darkSquareStyle: { backgroundColor: boardColors.dark },
+                  lightSquareNotationStyle: { color: '#26352d' },
+                  darkSquareNotationStyle: { color: '#000' },
                   squareStyles,
                   animationDurationInMs: 120,
                   allowDrawingArrows: false,
@@ -1645,6 +1825,13 @@ function App() {
               <span>{t('youColor', { color: colorName(playerSide) })}</span>
               <CapturedPieces locale={locale} pieces={playerCaptured.pieces} advantage={playerMaterialAdvantage} />
             </div>
+
+            {analysisIndex >= 0 && analysedMove.principalVariationUci.length > 0 && <div className={`review-line-navigation ${canShowConsequences ? 'with-consequences' : ''}`}>
+              {variationPly === null
+                ? <><button className="line-toggle" onClick={() => startVariation('best')}>{t('replayLine')}: <strong>{analysedMove.bestMoveSan}</strong> →</button>
+                  {canShowConsequences && <button className="line-toggle consequence-toggle" onClick={() => startVariation('consequence')}>{t('showConsequences')} →</button>}</>
+                : <div className="line-controls"><button onClick={() => stepVariation(variationPly - 1)} disabled={variationPly === 0} aria-label={t('previousLine')}>‹</button><span>{variationPly === 0 ? `${t(replayConsequences ? 'strongestReply' : 'bestMove')}: ${variationSan?.[0] ?? ''}` : `${t('lineStep', { current: variationPly, total: variationUci!.length })} · ${variationSan![variationPly - 1]}`}</span><button className="line-play" onClick={toggleVariationPlayback} aria-label={t(variationPlaying ? 'pauseLine' : variationFinished ? 'replayLine' : 'playLine')}>{variationPlaying ? 'Ⅱ' : variationFinished ? '↻' : '▶'}</button><button onClick={() => stepVariation(variationPly + 1)} disabled={variationPly >= variationUci!.length} aria-label={t('nextLine')}>›</button><button className="line-exit" onClick={exitVariation}>{t('exitLine')}</button></div>}
+            </div>}
 
             <nav className="review-controls" aria-label={t('moveNavigation')}>
               <button onClick={() => selectAnalysisMove(Math.max(-1, analysisIndex - 1))} disabled={analysisIndex < 0} aria-label={t('previousMove')}>‹</button>
@@ -1664,47 +1851,51 @@ function App() {
   return (
       <main className="shell training">
       <header className="training-header">
-        <button className="icon-button" onClick={() => setScreen('home')} aria-label={t('back')}>←</button>
+        <button className="icon-button" onClick={() => setScreen(screen === 'rating' ? 'home' : 'openings')} aria-label={t('back')}><UiIcon name="arrow-left" /></button>
         <div><strong>{screen === 'rating' ? t('ratingGame') : selectedCourse.name}</strong><small>{screen === 'rating' ? t('againstStockfish', { level: strength === 3000 ? 'MAX' : strength }) : activeScenario.name}</small></div>
-        <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : () => start()} aria-label={t('restart')}>↻</button>
+        <button className="icon-button" onClick={screen === 'rating' ? () => startRating('w') : () => start()} aria-label={t('restart')}><UiIcon name="rotate-ccw" /></button>
         </header>
 
       {screen !== 'rating' && <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>}
 
       <section className={`coach-card ${screen !== 'rating' && mode === 'practice' ? 'practice-mode' : ''}`}>
         <span className="mode-pill">{screen === 'rating' ? t('ratingLevel', { level: strength === 3000 ? 'MAX' : strength, color: colorName(playerColor) }) : t('coachLevel', { mode: t(modes.find((item) => item.id === mode)?.name ?? 'coach'), color: colorName(trainingColor) })}</span>
-        <h2>{screen === 'rating' ? (ratingResult ? t('ratingReady') : ratingStage === 'between' ? t('ratingHalfway') : t('playWithoutHints')) : gameFinished ? gameResultText(game.current, manualOutcome, locale) : freePlay ? t('middlegame') : current?.title ?? t('openingComplete')}</h2>
-        <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
-        <p className="coach-copy">
-          {screen === 'rating' && ratingStage === 'playing'
-            ? t('ratingInstructions')
-            : screen !== 'rating' && mode === 'coach' && current && !freePlay
-              ? current.explanation
-              : screen !== 'rating' && mode === 'exam' && !freePlay
-                ? t('examInstructions')
-                : '\u00a0'}
-        </p>
-      </section>
-
-      {screen === 'train' && mode === 'practice' && practiceDeviation && current && (
-        <section className="practice-correction" aria-live="assertive">
-          <strong>{t('deviationTitle')}</strong>
-          <p>{t('deviationDetail', { from: current.userMove.slice(0, 2), to: current.userMove.slice(2, 4) })}</p>
-          <small>{current.explanation}</small>
-          <div className="deviation-actions">
-            <button className="secondary" onClick={undoPracticeDeviation}>← {t('undoMove')}</button>
-            <button className="primary" onClick={continuePracticeDeviation}>{t('continueOutside')}</button>
+        <h2>{screen === 'rating' ? (ratingResult ? t('ratingReady') : ratingStage === 'between' ? t('ratingHalfway') : t('playWithoutHints')) : gameFinished ? gameResultText(game.current, manualOutcome, locale) : freePlay ? t('middlegame') : mode === 'coach' ? current?.title ?? t('openingComplete') : t(mode === 'exam' ? 'exam' : 'practice')}</h2>
+        {screen !== 'rating' && mode === 'practice' ? (
+          <div className="practice-details">
+            <div className="practice-details-scroll" tabIndex={0} role="region" aria-label={t('practice')}>
+              {practiceDeviation && current ? (
+                <div className="practice-correction" aria-live="assertive">
+                  <strong>{t('deviationTitle')}</strong>
+                  <p>{t('deviationDetail', { from: current.userMove.slice(0, 2), to: current.userMove.slice(2, 4) })}</p>
+                  <small>{current.explanation}</small>
+                </div>
+              ) : practiceCorrection && current && hint ? (
+                <div className="practice-correction" aria-live="assertive">
+                  <strong>{t('tryTheoryMove')}</strong>
+                  <p>{t('moveFromTo', { from: hint.from, to: hint.to })}</p>
+                  <small>{current.explanation}</small>
+                </div>
+              ) : <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>}
+            </div>
+            {practiceDeviation && current && <div className="deviation-actions">
+              <button className="secondary" onClick={undoPracticeDeviation}>← {t('undoMove')}</button>
+              <button className="primary" onClick={continuePracticeDeviation}>{t('continueOutside')}</button>
+            </div>}
           </div>
-        </section>
-      )}
-
-      {screen === 'train' && mode === 'practice' && practiceCorrection && current && hint && (
-        <section className="practice-correction" aria-live="assertive">
-          <strong>{t('tryTheoryMove')}</strong>
-          <p>{t('moveFromTo', { from: hint.from, to: hint.to })}</p>
-          <small>{current.explanation}</small>
-        </section>
-      )}
+        ) : <>
+          <p className="feedback" aria-live="polite">{feedback || '\u00a0'}</p>
+          <p className="coach-copy">
+            {screen === 'rating' && ratingStage === 'playing'
+              ? t('ratingInstructions')
+              : screen !== 'rating' && mode === 'coach' && current && !freePlay
+                ? current.explanation
+                : screen !== 'rating' && mode === 'exam' && !freePlay
+                  ? t('examInstructions')
+                  : '\u00a0'}
+          </p>
+        </>}
+      </section>
 
       <div className="material-row opponent-material" aria-label={t('opponentMaterial')}>
         <span>Stockfish · {colorName(playerSide === 'w' ? 'b' : 'w')}</span>
@@ -1714,11 +1905,14 @@ function App() {
       <section className={`board-wrap ${selected ? 'piece-selected' : ''}`} aria-label={t('board')}>
         <Chessboard options={{
           id: 'training-board',
+          pieces: BOARD_PIECES,
           position: displayedFen,
           boardOrientation: playerSide === 'b' ? 'black' : 'white',
           boardStyle: { borderRadius: '12px', boxShadow: '0 16px 38px rgba(0,0,0,.28)', overflow: 'hidden', touchAction: 'pan-y' },
-          lightSquareStyle: { backgroundColor: '#d8cfb6' },
-          darkSquareStyle: { backgroundColor: '#6f8b7e' },
+          lightSquareStyle: { backgroundColor: boardColors.light },
+          darkSquareStyle: { backgroundColor: boardColors.dark },
+          lightSquareNotationStyle: { color: '#26352d' },
+          darkSquareNotationStyle: { color: '#000' },
           squareStyles,
           arrows: !analysisOpen && hint ? [{ startSquare: hint.from, endSquare: hint.to, color: 'rgba(239,190,77,.82)' }] : [],
           animationDurationInMs: 120,
@@ -1747,7 +1941,7 @@ function App() {
 
       <section className="game-controls">
         <div><span className={thinking ? 'status-dot thinking' : 'status-dot'} />{gameFinished ? t('gameFinished') : thinking ? t('stockfishThinkingShort') : game.current.turn() === playerSide ? t('yourTurn') : t('stockfishTurn')}</div>
-        <span>{screen === 'rating' ? t('noHints') : freePlay ? `${strength === 3000 ? 'MAX' : strength} Elo` : `${step}/${activeScenario.steps.length}`}</span>
+        <span>{screen === 'rating' ? t('noHints') : freePlay ? (strength === 3000 ? 'MAX' : `≈ ${strength} Elo`) : `${step}/${activeScenario.steps.length}`}</span>
       </section>
 
       {engineFailure && !thinking && <button className="secondary engine-retry" onClick={retryFailedEngine}>{t(engineFailure === 'rating-evaluation' ? 'retryEvaluation' : 'retryEngine')} →</button>}
@@ -1756,7 +1950,7 @@ function App() {
         <button className="secondary lesson-back" onClick={rewindLesson}>← {t('rewindLesson')}</button>
       )}
 
-      {screen !== 'rating' && freePlay && !gameFinished && !analysisOpen && (
+      {screen !== 'rating' && !gameFinished && !analysisOpen && (
         <div className="end-controls">
           <button onClick={() => void offerDraw()} disabled={thinking || game.current.turn() !== trainingColor}>{t('offerDraw')}</button>
           <button className="danger" onClick={resignGame} disabled={thinking}>{t('resign')}</button>

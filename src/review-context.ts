@@ -1,4 +1,8 @@
 import { Chess, type Square } from 'chess.js'
+import index from './data/opening-index.json'
+import { getCatalog } from './data/catalog'
+import { getCourses } from './data/courses'
+import type { Locale } from './i18n/locale'
 
 export type OpeningKey = `course:${string}`
   | 'openingUnknown' | 'openingKingPawn' | 'openingQueenPawn' | 'openingEnglish'
@@ -72,21 +76,73 @@ const knownPositions = new Map(anchors.map(([key, priority, line]) => {
   return [positionKey(position), { key, priority }] as const
 }))
 
-export function detectOpeningKey(moves: string[]): OpeningKey {
+export type OpeningMatch = { eco: string; name: string; courseId: string | null }
+const namedPositions = new Map<string, OpeningMatch>(index.positions.map(([fen, eco, name, courseId]) => [fen, { eco, name, courseId: courseId || null }]))
+const bookMoves = new Map((index.book as [string, string[]][]).map(([fen, moves]) => [fen, new Set(moves)]))
+const familyKeys: Record<string, OpeningKey> = {
+  italian: 'openingItalian', london: 'openingLondon', 'queens-gambit': 'openingQueenGambit',
+  qgd: 'openingQgd', 'caro-kann': 'openingCaroKann', 'ruy-lopez': 'openingRuyLopez',
+  sicilian: 'openingSicilian', english: 'openingEnglish', 'kings-indian': 'openingKingsIndian',
+  'nimzo-indian': 'openingNimzo', grunfeld: 'openingGrunfeld', 'queens-pawn': 'openingQueenPawn',
+}
+
+function openingContext(moves: string[]) {
   const position = new Chess()
   let identified: OpeningKey = 'openingUnknown'
+  let opening: OpeningMatch | null = null
   let priority = 0
   for (const uci of moves) {
     try {
       position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' })
     } catch { break }
-    const match = knownPositions.get(positionKey(position))
+    const key = positionKey(position)
+    const named = namedPositions.get(key)
+    if (named) {
+      opening = named
+      if (named.courseId) {
+        identified = familyKeys[named.courseId] ?? `course:${named.courseId}`
+        priority = 0
+      }
+    }
+    const match = knownPositions.get(key)
     if (match && match.priority >= priority) {
       identified = match.key
       priority = match.priority
     }
   }
-  return identified
+  return { key: identified, opening }
+}
+
+export function detectOpeningKey(moves: string[]): OpeningKey {
+  return openingContext(moves).key
+}
+
+export function detectOpening(moves: string[]): OpeningMatch | null {
+  return openingContext(moves).opening
+}
+
+// Only moves actually present in the public Lichess PGNs count as book moves.
+export function isBookMove(fen: string, uci: string): boolean {
+  return bookMoves.get(fen.split(' ').slice(0, 4).join(' '))?.has(uci) ?? false
+}
+
+const normalizeName = (name: string) => name.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[’‘]/g, "'").toLowerCase()
+const ukCatalog = new Map(getCatalog('uk').map((course) => [course.id, course.name]))
+const ukCourses = new Map(getCourses('uk').map((course) => [course.id, course]))
+const knownVariants = getCourses('en').flatMap((course) => course.variants.filter((variant) => variant.id !== 'all').map((variant) => ({
+  course: normalizeName(course.name), name: normalizeName(variant.name),
+  translated: `${ukCourses.get(course.id)!.name}: ${ukCourses.get(course.id)!.variants.find((item) => item.id === variant.id)!.name}`,
+}))).sort((a, b) => b.name.length - a.name.length)
+
+export function detectOpeningName(moves: string[], locale: Locale): string | null {
+  const opening = detectOpening(moves)
+  if (!opening) return null
+  if (locale === 'en') return `${opening.name} · ${opening.eco}`
+  const normalized = normalizeName(opening.name)
+  const variant = knownVariants.find((item) => normalized.startsWith(item.course) && normalized.includes(item.name))
+  const name = variant?.translated ?? (opening.courseId ? ukCatalog.get(opening.courseId) : undefined)
+  // The upstream data is English. Never invent a Ukrainian translation of an unknown variant.
+  return name ? `${name} · ${opening.eco}` : `Дебют ${opening.eco}`
 }
 
 function bishopRayToF7(square: Square): Square[] {

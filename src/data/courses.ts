@@ -435,6 +435,11 @@ const italianExtraLines: RepertoireLine[] = [
   { id: 'traxler', name: 'Контратака Тракслера', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','f3g5','f8c5','g5f7','c5f2','e1f2','f6e4','f2g1','d8h4'] },
   { id: 'max-lange', name: 'Атака Макса Ланге', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','d2d4','e5d4','e1g1','f8c5','e4e5','d7d5','e5f6','d5c4','f1e1','c8e6'] },
   { id: 'deutz', name: 'Гамбіт Дейца', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','f8c5','e1g1','g8f6','d2d4','c5d4','f3d4','c6d4'] },
+  { id: 'polerio', name: 'Захист Полеріо', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','f3g5','d7d5','e4d5','c6a5','c4b5','c7c6','d5c6','b7c6','b5d3'] },
+  { id: 'fritz', name: 'Варіант Фріца', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','f3g5','d7d5','e4d5','c6d4'] },
+  { id: 'ulvestad', name: 'Варіант Ульвестада', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','f3g5','d7d5','e4d5','b7b5'] },
+  { id: 'evans-declined', name: 'Відхилений гамбіт Еванса', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','f8c5','b2b4','c5b6'] },
+  { id: 'two-knights-be7', name: 'Захист двох коней: 4…Be7', moves: ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','d2d3','f8e7'] },
 ]
 
 const italianCourse: Course = {
@@ -454,6 +459,11 @@ const italianCourse: Course = {
     { id: 'traxler', name: 'Контратака Тракслера' },
     { id: 'max-lange', name: 'Атака Макса Ланге' },
     { id: 'deutz', name: 'Гамбіт Дейца' },
+    { id: 'polerio', name: 'Захист Полеріо' },
+    { id: 'fritz', name: 'Варіант Фріца' },
+    { id: 'ulvestad', name: 'Варіант Ульвестада' },
+    { id: 'evans-declined', name: 'Відхилений гамбіт Еванса' },
+    { id: 'two-knights-be7', name: 'Захист двох коней: 4…Be7' },
   ],
 }
 

@@ -139,7 +139,9 @@ export function detectOpeningName(moves: string[], locale: Locale): string | nul
   if (!opening) return null
   if (locale === 'en') return `${opening.name} · ${opening.eco}`
   const normalized = normalizeName(opening.name)
-  const variant = knownVariants.find((item) => normalized.startsWith(item.course) && normalized.includes(item.name))
+  // The last matching variant is the deepest named branch, not the longest parent name.
+  const variant = knownVariants.filter((item) => normalized.startsWith(item.course) && normalized.includes(item.name))
+    .sort((a, b) => normalized.lastIndexOf(b.name) - normalized.lastIndexOf(a.name))[0]
   const name = variant?.translated ?? (opening.courseId ? ukCatalog.get(opening.courseId) : undefined)
   // The upstream data is English. Never invent a Ukrainian translation of an unknown variant.
   return name ? `${name} · ${opening.eco}` : `Дебют ${opening.eco}`

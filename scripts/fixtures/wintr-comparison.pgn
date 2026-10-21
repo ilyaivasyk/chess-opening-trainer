@@ -1,0 +1,9 @@
+[Event "Debut training"]
+[Site "Offline"]
+[Date "2026.10.21"]
+[Round "-"]
+[White "Player"]
+[Black "Stockfish 1000"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 g6 9. Bxd5+ Ke7 10. d3 Qxd5 11. Nxd5+ Kd7 12. Nf6+ Ke7 13. Bg5 Nb4 14. Nd5+ Ke8 15. Nxc7+ Kd7 16. Qf7+ Kc6 17. O-O-O Rb8 18. a3 Na6 19. Nxa6 Ra8 20. Qc7+ Kd5 21. Nb4+ Bxb4 22. axb4 Re8 23. c4+ Ke6 24. Qxh7 b6 25. Qxg6+ Kd7 26. Qf5+ Kd6 27. c5+ bxc5 28. bxc5+ Kd5 29. d4 Bxf5 30. dxe5+ Ke6 31. Rd6+ Kf7 32. Re1 Rab8 33. e6+ Kf8 34. e7+ Kg7 35. Bf6+ Kf7 36. Bh4 Bh7 37. Re5 Rb7 38. c6 Rb3 39. Rd8 Rb4 40. Rxe8 Rc4+ 41. Kd2 Rc2+ 42. Ke3 Kg6 43. Rd8 Rxf2 44. Kxf2 Kh6 45. e8=Q Be4 46. Rd6+ Kg7 47. Qe7+ Kg8 48. Rd8# 1-0

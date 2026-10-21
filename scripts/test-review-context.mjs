@@ -82,6 +82,13 @@ assert.equal(detectOpening(moves('c4 Nf6 d4 g6 Nc3 d5')).courseId,'grunfeld')
 assert.match(detectOpeningName(moves('e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'),'en'),/Najdorf.*B90/)
 assert.match(detectOpeningName(moves('e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'),'uk'),/Найдорфа.*B90/)
 assert.equal(detectOpeningName([], 'uk'),null)
+const friedLiver = 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5 Nxf7'
+for (const line of [friedLiver, `${friedLiver} Kxf7 Qf3+ Ke6 Nc3 g6`]) {
+  assert.equal(detectOpeningName(moves(line), 'en'), 'Italian Game: Two Knights Defense, Fried Liver Attack · C57')
+  assert.equal(detectOpeningName(moves(line), 'uk'), 'Італійська партія: Атака смаженої печінки · C57', 'Prefer the precise child variation over a longer parent name, and retain it after a deviation')
+}
+assert(!detectOpeningName(moves('e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5'), 'en').includes('Fried Liver'), 'Ng5 alone is not the Fried Liver')
+assert(!detectOpeningName(moves('e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 Bc5'), 'en').includes('Fried Liver'), 'The Traxler is a separate branch')
 const najdorf = new Chess()
 najdorf.loadPgn('1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6')
 assert.equal(isBookMove(najdorf.fen(),'h1g1'),true,'6.Rg1 is the upstream Petronić Attack')

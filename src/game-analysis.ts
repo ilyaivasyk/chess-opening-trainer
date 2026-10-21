@@ -270,7 +270,9 @@ export async function analyseRecordedGame(records: GameMoveRecord[], analyse: An
       }
     }
     checkCancelled()
-    const label = classifiedLabel(record, before, after, reviewed, line.san[0], brilliant)
+    let label = classifiedLabel(record, before, after, reviewed, line.san[0], brilliant)
+    // A severe probability loss must not be softened by a raw-centipawn boundary.
+    if (winDrop >= 22 && label !== 'best' && label !== 'brilliant') label = 'blunder'
     reviewed.push({
       ...record,
       // An opening name is historical context, not proof that its move is sound.

@@ -55,3 +55,18 @@ The local move-accuracy and complete-game accuracy calculations in `src/game-ana
 Game accuracy uses sliding windows of 2–8 positions, population standard deviation clamped to 0.5–12 as weights, and the average of the volatility-weighted and harmonic means. Weights come from the **complete alternating-color trace before selecting a side**. Our trace begins with the actual initial Stockfish evaluation; Lichess's default is 15 cp. Per-side empty input displays zero locally; the upstream combined result is optional. Engine builds, search duration and initial evaluation differ, so this does not promise identical Lichess scores. Independent numerical fixtures cover both colors, window sizes 2/3/4/8, late errors, quiet and volatile traces, and mate clamping.
 
 The separate two-game placement screen still aggregates human-only samples without a full opposing-side evaluation trace. Its estimate remains an uncalibrated approximation, not a Lichess or Chess.com rating. Move category glyphs are based on the MIT classifier recorded in `THIRD_PARTY_NOTICES.md`, plus additional engine verification for sacrifices; Lichess's own advice exposes inaccuracy/mistake/blunder rather than Chess.com-style brilliant moves.
+
+
+## Additional Italian training branches (2026-10-21)
+
+Five selected missing branches were checked against the official Chess.com opening pages below. Only move/name facts are used; no Chess.com explanations, statistics, badges, audio or page implementation are copied. The local lessons reuse our existing original contextual move notes and are generated for both colors with identical UK/EN moves. These 8–15-ply lines introduce the named branch; they are not complete repertoires. All remain inside the existing free Italian course.
+
+| Branch ID | Verified SAN sequence | Primary source |
+| --- | --- | --- |
+| `polerio` | 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Na5 6. Bb5+ c6 7. dxc6 bxc6 8. Bd3 | [Official opening page](https://www.chess.com/openings/Italian-Game-Two-Knights-Defense) |
+| `fritz` | 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nd4 | [Official opening page](https://www.chess.com/openings/Italian-Game-Knight-Attack-Fritz-Variation) |
+| `ulvestad` | 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 b5 | [Official opening page](https://www.chess.com/openings/Italian-Game-Knight-Attack-Ulvestad-Variation) |
+| `evans-declined` | 1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bb6 | [Official opening page](https://www.chess.com/openings/Giuoco-Piano-Game-Evans-Gambit-Declined) |
+| `two-knights-be7` | 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. d3 Be7 | [Official opening page](https://www.chess.com/openings/Italian-Game-Two-Knights-Defense) |
+
+The existing Fried Liver branch was checked against [Chess.com’s dedicated entry](https://www.chess.com/openings/Italian-Game-Fried-Liver-Attack): the defining move is 6.Nxf7 after 5...Nxd5, not 4.Ng5 alone. It already had a 14-ply two-color lesson and was not duplicated. The other four added paths are also present as edges in the pinned CC0 Lichess index; Polerio 8.Bd3 is documented in the Chess.com Two Knights entry and becomes an explicit local course-book edge.

@@ -7,6 +7,7 @@ import type { Locale } from './i18n/locale'
 import type { SavedGame } from './game-history'
 import { historyUi } from './history-copy'
 import { PgnExport } from './pgn-export'
+import { detectOpeningName } from './review-context'
 
 type HistoryProps = {
   games: SavedGame[]
@@ -21,8 +22,16 @@ export function GameHistoryView({ games, locale, boardColors, onBack, storageErr
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selectedGame = games.find((game) => game.id === selectedId)
   const catalog = getCatalog(locale)
+  const openingNames = useMemo(() => new Map(games.map((game) => {
+    try {
+      const position = new Chess()
+      position.loadPgn(game.pgn, { strict: true })
+      const moves = position.history({ verbose: true }).map((move) => `${move.from}${move.to}${move.promotion ?? ''}`)
+      return [game.id, detectOpeningName(moves, locale)]
+    } catch { return [game.id, null] }
+  })), [games, locale])
   const t = (key: keyof typeof historyUi) => historyUi[key][locale]
-  const title = (game: SavedGame) => catalog.find((entry) => entry.id === game.courseId)?.name ?? t(modeLabels[game.mode])
+  const title = (game: SavedGame) => openingNames.get(game.id) ?? catalog.find((entry) => entry.id === game.courseId)?.name ?? t(modeLabels[game.mode])
   const metadata = (game: SavedGame) => `${t(modeLabels[game.mode])} · ${t(game.playerColor === 'w' ? 'historyWhite' : 'historyBlack')} · Stockfish ${game.strength === 3000 ? 'MAX' : game.strength}`
   const date = (game: SavedGame) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(game.createdAt))
   const result = (game: SavedGame) => game.result === '*' ? t('unfinishedGame') : game.result

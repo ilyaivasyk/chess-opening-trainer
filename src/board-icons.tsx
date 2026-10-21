@@ -18,7 +18,7 @@ export function resultLoser(position: Chess, resigned: boolean, player: Color, f
 }
 
 export function MoveIcon({ symbol }: { symbol: string }) {
-  const name = ({ '📖': 'book-open', '★': 'star', '✓': 'check', '↗': 'arrow-up-right' } as const)[symbol as '📖' | '★' | '✓' | '↗']
+  const name = ({ '📖': 'book-open', '★': 'star', '✓': 'check', '↗': 'arrow-up-right', '👍': 'thumbs-up' } as const)[symbol as '📖' | '★' | '✓' | '↗' | '👍']
   if (name) return <UiIcon name={name} />
   return <span>{symbol}</span>
 }

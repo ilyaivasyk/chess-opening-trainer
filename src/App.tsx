@@ -16,12 +16,15 @@ import { createSavedGame, readGameHistory, saveGame, type GameDetails } from './
 import { GameHistoryView } from './game-history-view'
 import { PgnExport } from './pgn-export'
 import { historyUi } from './history-copy'
+import { TrapLessons } from './trap-lessons'
+import { trapUi } from './trap-copy'
+import { TRAPS } from './traps'
 
 declare const __PREVIEW_COURSES__: { uk: Course[]; en: Course[] } | null
 const previewCourses = typeof __PREVIEW_COURSES__ === 'undefined' ? null : __PREVIEW_COURSES__
 
 type Mode = 'coach' | 'practice' | 'exam'
-type Screen = 'home' | 'openings' | 'theory' | 'train' | 'rating' | 'history'
+type Screen = 'home' | 'openings' | 'theory' | 'train' | 'rating' | 'history' | 'traps'
 type Category = 'beginner' | 'intermediate' | 'advanced'
 type ColorFilter = 'all' | 'white' | 'black'
 type VariantFilter = string
@@ -53,7 +56,7 @@ type MoveBadge = {
   square: Square
   symbol: string
   label: string
-  tone: 'theory' | 'brilliant' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'departure'
+  tone: 'theory' | 'brilliant' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'departure'
 }
 
 type LessonStep = {
@@ -74,6 +77,7 @@ type Scenario = {
 
 const ui = {
   ...historyUi,
+  ...trapUi,
   brand: { uk: 'Шаховий тренер', en: 'Chess trainer' },
   debut: { uk: 'Дебют', en: 'Debut' },
   level: { uk: 'Рівень', en: 'Level' },
@@ -438,8 +442,8 @@ function badgeForAnalysis(move: AnalysedMove, locale: Locale): MoveBadge {
   if (move.bookMove) return { square: move.to, symbol: '📖', label: translate(locale, 'theory'), tone: 'theory' }
   const badges: Record<AnalysedMove['label'], Omit<MoveBadge, 'square'>> = {
     brilliant: { symbol: '!!', label: translate(locale, 'brilliant'), tone: 'brilliant' },
-    best: { symbol: '★', label: translate(locale, 'best'), tone: 'great' },
-    excellent: { symbol: '!', label: translate(locale, 'excellent'), tone: 'great' },
+    best: { symbol: '★', label: translate(locale, 'best'), tone: 'best' },
+    excellent: { symbol: '👍', label: translate(locale, 'excellent'), tone: 'excellent' },
     good: { symbol: '✓', label: translate(locale, 'good'), tone: 'good' },
     inaccuracy: { symbol: '?!', label: translate(locale, 'inaccuracy'), tone: 'inaccuracy' },
     mistake: { symbol: '?', label: translate(locale, 'mistake'), tone: 'mistake' },
@@ -488,15 +492,6 @@ function gameResultText(position: Chess, outcome: ManualOutcome, locale: Locale)
   return translate(locale, 'endedResult')
 }
 
-function qualityClass(label: AnalysedMove['label']) {
-  if (label === 'brilliant') return 'brilliant'
-  if (label === 'best' || label === 'excellent') return 'great'
-  if (label === 'good') return 'good'
-  if (label === 'inaccuracy') return 'inaccuracy'
-  if (label === 'mistake') return 'mistake'
-  return 'blunder'
-}
-
 function kingSquare(position: Chess, color: PlayerColor): Square | null {
   for (const file of 'abcdefgh') {
     for (let rank = 1; rank <= 8; rank += 1) {
@@ -515,13 +510,13 @@ function evaluationLabel(centipawns: number) {
 }
 
 function graphPointColor(move: AnalysedMove) {
-  if (move.bookMove) return '#9b74c7'
-  if (move.label === 'brilliant') return '#27b7b6'
-  if (move.label === 'best' || move.label === 'excellent') return '#72b64b'
-  if (move.label === 'good') return '#89a892'
-  if (move.label === 'inaccuracy') return '#e5b534'
-  if (move.label === 'mistake') return '#ed832f'
-  return '#e04b43'
+  if (move.bookMove) return '#a88764'
+  if (move.label === 'brilliant') return '#1baaa6'
+  if (move.label === 'best' || move.label === 'excellent') return '#98bc49'
+  if (move.label === 'good') return '#97af8b'
+  if (move.label === 'inaccuracy') return '#f4bf44'
+  if (move.label === 'mistake') return '#e28c28'
+  return '#c93230'
 }
 
 function App() {
@@ -538,6 +533,7 @@ function App() {
   const lastDropAt = useRef(0)
   const reviewMovesRef = useRef<HTMLDivElement | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
+  const [trapReturn, setTrapReturn] = useState<'openings' | 'theory'>('openings')
   const [boardTheme, setBoardTheme] = useState(() => getBoardTheme(readJson<unknown>('board-appearance', 'classic')))
   const boardColors = BOARD_THEMES[boardTheme]
   const [locale, setLocale] = useState<Locale>(() => {
@@ -649,8 +645,9 @@ function App() {
   const reviewArrow = analysisIndex >= 0 ? variationUci?.[variationPly ?? 0] : undefined
   const playerAnalysis = analysisItems.filter((item) => item.color === playerSide && item.actor === 'player')
   const opponentAnalysis = analysisItems.filter((item) => item.color !== playerSide)
-  const analysisAccuracy = playerAnalysis.length ? Math.round(gameAccuracy(analysisItems, playerSide)) : 0
-  const opponentAccuracy = opponentAnalysis.length ? Math.round(gameAccuracy(analysisItems, playerSide === 'w' ? 'b' : 'w')) : 0
+  const analysisAccuracy = playerAnalysis.length ? gameAccuracy(analysisItems, playerSide) : 0
+  const opponentAccuracy = opponentAnalysis.length ? gameAccuracy(analysisItems, playerSide === 'w' ? 'b' : 'w') : 0
+  const formatAccuracy = (value: number) => new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)
   const playerScore = manualOutcome === 'resigned' ? 0 : manualOutcome === 'draw-agreed' || game.current.isDraw() ? .5 : game.current.isCheckmate() ? (game.current.turn() === playerSide ? 0 : 1) : .5
   const performanceRating = gamePerformance(analysisAccuracy, strength, playerScore, playerAnalysis.filter((item) => !item.bookMove).length)
   const analysisCounts = Object.fromEntries(analysisLabels.map((label) => [label, playerAnalysis.filter((item) => !item.bookMove && item.label === label).length])) as Record<AnalysisLabel, number>
@@ -1532,6 +1529,11 @@ function App() {
 
   const pgnExport = <><PgnExport pgn={currentPgn} locale={locale} />{archive.saveError && <p className="history-warning" role="alert">{t('historySaveFailed')}</p>}</>
 
+  const trapCount = TRAPS.filter((lesson) => lesson.courseId === selectedCourseId).length
+  const trapEntry = trapCount > 0 && <button className="trap-entry" onClick={() => { setTrapReturn(screen === 'theory' ? 'theory' : 'openings'); setScreen('traps') }}><UiIcon name="book-open" /><span><strong>{t('traps')} · {trapCount}</strong><small>{t('trapEntryDetail')}</small></span><UiIcon name="arrow-right" /></button>
+
+  if (screen === 'traps') return <TrapLessons courseId={selectedCourseId} locale={locale} boardColors={boardColors} onBack={() => setScreen(trapReturn)} />
+
   if (screen === 'history') return <GameHistoryView games={archive.games} locale={locale} boardColors={boardColors} storageError={archive.readError} onBack={() => setScreen('home')} />
 
   if (privacyOpen) {
@@ -1652,6 +1654,7 @@ function App() {
                 {selectedCourse.variants.map((item) => <button className={variantFilter === item.id ? 'active' : ''} onClick={() => setVariantFilter(item.id)} key={item.id}>{item.id === 'all' ? t('randomVariation', { count: selectedCourse.variants.length - 1 }) : item.name}</button>)}
               </div>
             </div>}
+          {selectedLesson && trapEntry}
         </section>
 
         <section>
@@ -1741,6 +1744,7 @@ function App() {
           <div className="square-guide">{theory.keySquares.map((item) => <div key={item.square}><strong>{item.square}</strong><p>{item.idea}</p></div>)}</div>
         </section>
         <section className="warning-card"><strong>{t('caution')}</strong><p>{trainingColor === 'w' ? theory.warning : t('watchWhitePlan', { white: theory.whiteGoals[0], black: theory.blackGoals[0] })}</p></section>
+        {trapEntry}
         <button className="primary" onClick={finishTheory}>{t('startTraining')} <span>→</span></button>
       </main>
     )
@@ -1756,11 +1760,11 @@ function App() {
         </header>
         <section className={`report-result ${playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'}`}>
           <span className="result-icon"><GameResultIcon kind={playerScore === 1 ? 'win' : playerScore === .5 ? 'draw' : 'loss'} /></span>
-          <div><small>{t('analysisFinished')}</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome, locale)}</p></div>
+          <div><small>{t('analysisFinished')}</small><h1 id="analysis-report-title">{resultTitle}</h1><p>{gameResultText(game.current, manualOutcome, locale)}</p><p>{detectOpening(analysisItems.map((item) => item.uci), locale)}</p></div>
         </section>
         <section className="report-rating">
           <div><small>{t('approximatePerformance')}</small><strong>{performanceRating === null ? '—' : `≈ ${performanceRating}`}</strong>{performanceRating === null && <p className="rating-evidence">{t('insufficientLevelEvidence')}</p>}</div>
-          <div><small>{t('yourAccuracy')}</small><strong>{analysisAccuracy}%</strong></div>
+          <div><small>{t('yourAccuracy')}</small><strong>{formatAccuracy(analysisAccuracy)}%</strong></div>
         </section>
         <section className="evaluation-chart" aria-label={t('evaluationChart')}>
           <div className="chart-title"><strong>{t('gameFlow')}</strong><span>{t('whiteBlackAdvantage')}</span></div>
@@ -1773,14 +1777,14 @@ function App() {
           </svg>
         </section>
         <section className="players-summary">
-          <div><span className="player-piece"><PieceIcon type="k" color={playerSide} /></span><small>{t('youColor', { color: colorName(playerSide) })}</small><strong>{analysisAccuracy}%</strong></div>
-          <div><span className="player-piece"><PieceIcon type="k" color={playerSide === 'w' ? 'b' : 'w'} /></span><small>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })}</small><strong>{opponentAccuracy}%</strong></div>
+          <div><span className="player-piece"><PieceIcon type="k" color={playerSide} /></span><small>{t('youColor', { color: colorName(playerSide) })}</small><strong>{formatAccuracy(analysisAccuracy)}%</strong></div>
+          <div><span className="player-piece"><PieceIcon type="k" color={playerSide === 'w' ? 'b' : 'w'} /></span><small>{t('stockfishLevel', { level: strength === 3000 ? 'MAX' : strength })}</small><strong>{formatAccuracy(opponentAccuracy)}%</strong></div>
         </section>
         <section className="quality-report">
           <h2>{t('yourMoves')}</h2>
           <div className="quality-summary">
             <div><span className="quality theory"><MoveIcon symbol="📖" /></span><strong>{bookMoveCount}</strong><small>{t('theory')}</small></div>
-            {analysisLabels.map((label) => <div key={label}><span className={`quality ${qualityClass(label)}`}>{badgeForAnalysis({ label, to: 'a1' } as AnalysedMove, locale).symbol}</span><strong>{analysisCounts[label]}</strong><small>{t(label)}</small></div>)}
+            {analysisLabels.map((label) => <div key={label}><span className={`quality ${label}`}><MoveIcon symbol={badgeForAnalysis({ label, to: 'a1' } as AnalysedMove, locale).symbol} /></span><strong>{analysisCounts[label]}</strong><small>{t(label)}</small></div>)}
           </div>
         </section>
         <button className="primary report-review-button" onClick={() => setAnalysisSummaryOpen(false)}>{t('viewReview')} <span>→</span></button>
@@ -1813,7 +1817,7 @@ function App() {
             <section className="review-commentary" aria-live="polite">
               {analysisIndex < 0 ? <><h2>{t('initialPosition')}</h2><p>{t('initialPositionDetail')}</p></> : <>
               <div className="review-title">
-                <span className={`quality ${analysedMove.bookMove ? 'theory' : qualityClass(analysedMove.label)}`}>{analysedMove.bookMove ? <><MoveIcon symbol="📖" /> {t('theory')}</> : <><MoveIcon symbol={badgeForAnalysis(analysedMove, locale).symbol} /> {t(analysedMove.label)}</>}</span>
+                <span className={`quality ${analysedMove.bookMove ? 'theory' : analysedMove.label}`}>{analysedMove.bookMove ? <><MoveIcon symbol="📖" /> {t('theory')}</> : <><MoveIcon symbol={badgeForAnalysis(analysedMove, locale).symbol} /> {t(analysedMove.label)}</>}</span>
                 <strong>{Math.ceil(analysedMove.ply / 2)}{analysedMove.color === 'w' ? '.' : '...'} {analysedMove.san}</strong>
               </div>
               <p><b>{analysisOpeningName}.</b> {analysedMove.bookMove
@@ -1885,7 +1889,7 @@ function App() {
             <nav className="review-controls" aria-label={t('moveNavigation')}>
               <button onClick={() => selectAnalysisMove(Math.max(-1, analysisIndex - 1))} disabled={analysisIndex < 0} aria-label={t('previousMove')}>‹</button>
               <div className="review-moves" ref={reviewMovesRef}>
-                {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : qualityClass(item.label)}`} onClick={() => selectAnalysisMove(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
+                {analysisItems.map((item, index) => <button className={`${analysisIndex === index ? 'active' : ''} ${item.bookMove ? 'theory' : item.label}`} onClick={() => selectAnalysisMove(index)} key={`${item.ply}-${item.uci}`}>{Math.ceil(item.ply / 2)}{item.color === 'w' ? '.' : '…'} {item.san}</button>)}
               </div>
               <button onClick={() => selectAnalysisMove(Math.min(analysisItems.length - 1, analysisIndex + 1))} disabled={analysisIndex >= analysisItems.length - 1} aria-label={t('nextMove')}>›</button>
             </nav>

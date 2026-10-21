@@ -20,6 +20,7 @@ try {
     assert.equal(imageSource(renderToStaticMarkup(React.createElement(PieceIcon, { type: piece[1].toLowerCase(), color: piece[0] }))), source, `${piece}: side/promotion icon must match board`)
     assert.equal(imageSource(renderToStaticMarkup(React.createElement(CapturedPieces, { pieces: [{ type: piece[1].toLowerCase(), color: piece[0], count: 1 }], advantage: 0 }))), source, `${piece}: captures must match board`)
     assert(markup.includes('aria-hidden="true"') && markup.includes('draggable="false"'))
+    assert(!/<(?:script|foreignObject)|\son\w+=|(?:href|src)=["'](?!data:|#)/i.test(readyIcons.pieces[piece]), `${piece}: piece contains active or external content`)
   }
   for (const [name, svg] of Object.entries(readyIcons.ui)) {
     assert(!/<(?:script|foreignObject)|\son\w+=|(?:href|src)=["'](?!data:|#)/i.test(svg), `${name}: immutable icon contains active or external content`)
@@ -40,10 +41,12 @@ try {
   const pieces = renderToStaticMarkup(React.createElement(CapturedPieces, {pieces:[{type:'p',color:'b',count:3}],advantage:2}))
   assert(pieces.includes('<img') && pieces.includes('×3') && pieces.includes('+2'))
   assert(renderToStaticMarkup(React.createElement(MoveIcon,{symbol:'📖'})).includes('<svg'))
+  assert.equal(renderToStaticMarkup(React.createElement(MoveIcon,{symbol:'👍'})), renderToStaticMarkup(React.createElement(UiIcon,{name:'thumbs-up'})), 'Excellent move uses the ready thumbs-up glyph')
+  assert.equal(renderToStaticMarkup(React.createElement(MoveIcon,{symbol:'↗'})), renderToStaticMarkup(React.createElement(UiIcon,{name:'arrow-up-right'})), 'Departure keeps its own arrow glyph')
   for (const kind of ['loss','win']) {
     const markup = renderToStaticMarkup(React.createElement(KingResultBadge,{kind,label:kind,style:{}}))
     assert(markup.includes('<svg') && markup.includes('result-label visible'))
     if (kind === 'loss') assert(markup.includes('<image ') && markup.includes('rotate(70 50 50)') && !markup.includes('<img'), 'Tipped king must use valid SVG image markup')
   }
-  console.log('✓ Exact ready Chessnut pieces across board/captures/promotion, Lucide geometry/accessibility and checkmate/resignation result icons')
+  console.log('✓ Exact ready Cburnett pieces across board/captures/promotion, Lucide geometry/accessibility and checkmate/resignation result icons')
 } finally { await unlink(path) }

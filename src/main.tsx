@@ -4,6 +4,7 @@ import App from './App'
 import { preparePwa } from './pwa'
 import './styles.css'
 import './history.css'
+import './traps.css'
 
 void preparePwa()
 

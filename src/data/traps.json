@@ -1,0 +1,635 @@
+[
+  {
+    "id": "italian-legal",
+    "courseId": "italian",
+    "name": {
+      "uk": "Пастка Легаля",
+      "en": "Légal’s trap"
+    },
+    "setup": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "d6",
+      "Nc3",
+      "Bg4",
+      "h3",
+      "Bh5",
+      "Nxe5"
+    ],
+    "mistake": "Bxd1",
+    "punish": [
+      "Bxf7+",
+      "Ke7",
+      "Nd5#"
+    ],
+    "avoid": [
+      "Nxe5",
+      "Qxh5"
+    ],
+    "why": {
+      "uk": "Чорні беруть ферзя, не перевіривши шахи білих. Кінь міг піти з f3: він був зв’язаний із ферзем, а не з королем.",
+      "en": "Black takes the queen without checking White’s forcing moves. The knight could leave f3 because it was pinned to the queen, not the king."
+    },
+    "punishmentIdea": {
+      "uk": "Bxf7+ змушує короля піти на e7. Потім Nd5# завершує атаку двох коней і слона. Мат важливіший за втрату ферзя.",
+      "en": "Bxf7+ forces the king to e7. Nd5# completes the attack by the two knights and bishop. Checkmate matters more than the lost queen."
+    },
+    "avoidanceIdea": {
+      "uk": "Замість ферзя візьми коня: Nxe5. Після Qxh5 білі мають зайвого пішака, але показаного мату вже немає. Перед взяттям ферзя перевір усі шахи.",
+      "en": "Take the knight with Nxe5 instead of the queen. After Qxh5 White is a pawn up, but the shown mate is avoided. Before taking a queen, look for your opponent’s checks."
+    },
+    "payoff": "mate",
+    "materialGain": 0,
+    "sources": [
+      {
+        "title": "Chess.com — The 10 Best Chess Traps",
+        "url": "https://www.chess.com/article/view/the-10-best-chess-traps"
+      },
+      {
+        "title": "Cumnor Chess Club — Légal trap, exact move order",
+        "url": "https://cumnorchessclub.co.uk/2016/01/29/legal-chess-trap-stephen-hawking/"
+      }
+    ]
+  },
+  {
+    "id": "london-jobava-c7",
+    "courseId": "london",
+    "name": {
+      "uk": "Лондон Джобави: вилка на c7",
+      "en": "Jobava London: the c7 fork"
+    },
+    "setup": [
+      "d4",
+      "d5",
+      "Bf4",
+      "Nc6",
+      "Nc3",
+      "Nf6",
+      "Nb5",
+      "e5",
+      "dxe5"
+    ],
+    "mistake": "Ne4",
+    "punish": [
+      "Qxd5",
+      "Qxd5",
+      "Nxc7+",
+      "Kd8",
+      "Nxd5"
+    ],
+    "avoid": [
+      "Nh5",
+      "Bg5"
+    ],
+    "why": {
+      "uk": "Ne4 дозволяє Qxd5. Якщо чорні беруть білого ферзя, їхній ферзь залишає d8 і перестає захищати c7. Це відкриває вилку конем.",
+      "en": "Ne4 allows Qxd5. If Black takes White’s queen, the black queen leaves d8 and no longer guards c7, allowing a knight fork."
+    },
+    "punishmentIdea": {
+      "uk": "Qxd5 бере пішака. Після необачного Qxd5 вилка Nxc7+ змушує короля відійти, а Nxd5 повертає ферзя. Це навчальна гілка: чорні не зобов’язані брати ферзя.",
+      "en": "Qxd5 takes a pawn. After the careless Qxd5, Nxc7+ forces the king to move and Nxd5 recovers the queen. This is an illustrative line: Black does not have to take the queen."
+    },
+    "avoidanceIdea": {
+      "uk": "Зіграй Nh5 із нападом на слона. Не відповідай на Qxd5 автоматичним взяттям ферзя: спершу перевір Nxc7+. Пішак e5 перекриває діагональ слона f4 до c7.",
+      "en": "Play Nh5, attacking the bishop. Do not answer Qxd5 by automatically taking the queen: first check Nxc7+. The e5 pawn blocks the f4 bishop’s diagonal to c7."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "Remote Chess Academy — Jobava London System Trap",
+        "url": "https://chess-teacher.com/jobava-london-system-trap/"
+      }
+    ]
+  },
+  {
+    "id": "queens-gambit-greed",
+    "courseId": "queens-gambit",
+    "name": {
+      "uk": "Прийнятий гамбіт: жадібність на b5",
+      "en": "Accepted gambit: greed on b5"
+    },
+    "setup": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "e3",
+      "b5",
+      "a4",
+      "c6",
+      "axb5"
+    ],
+    "mistake": "cxb5",
+    "punish": [
+      "Qf3",
+      "Nc6",
+      "Qxc6+",
+      "Bd7",
+      "Qf3"
+    ],
+    "avoid": [
+      "e6",
+      "Bxc4",
+      "Nf6"
+    ],
+    "why": {
+      "uk": "Взяття cxb5 відкриває діагональ f3–a8. Тура a8 опиняється під ударом ферзя. Спроба втримати зайвого пішака коштує фігури.",
+      "en": "The cxb5 capture opens the f3–a8 diagonal, exposing the a8 rook to the queen. Trying to keep the extra pawn costs a piece."
+    },
+    "punishmentIdea": {
+      "uk": "Qf3 атакує туру a8. У показаному захисті Nc6 чорні закривають діагональ конем, але після Qxc6+ втрачають його. Ферзь повертається на f3 після Bd7.",
+      "en": "Qf3 attacks the a8 rook. In the shown Nc6 defence, Black blocks the diagonal with a knight but loses it to Qxc6+. The queen returns to f3 after Bd7."
+    },
+    "avoidanceIdea": {
+      "uk": "Зіграй e6, поверни пішака після Bxc4 і розвивай коня ходом Nf6. Не поспішай із cxb5: цей хід знову відкриє небезпечну діагональ. Білі вже мають кращу позицію.",
+      "en": "Play e6, return the pawn after Bxc4 and develop with Nf6. Do not rush cxb5: it would reopen the dangerous diagonal. White already has the better position."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "Remote Chess Academy — Queen’s Gambit Traps",
+        "url": "https://chess-teacher.com/queens-gambit-traps/"
+      }
+    ]
+  },
+  {
+    "id": "caro-smothered",
+    "courseId": "caro-kann",
+    "name": {
+      "uk": "Каро — Канн: мат на d6",
+      "en": "Caro–Kann: mate on d6"
+    },
+    "setup": [
+      "e4",
+      "c6",
+      "d4",
+      "d5",
+      "Nc3",
+      "dxe4",
+      "Nxe4",
+      "Nd7",
+      "Qe2"
+    ],
+    "mistake": "Ngf6",
+    "punish": [
+      "Nd6#"
+    ],
+    "avoid": [
+      "Ndf6",
+      "Nf3"
+    ],
+    "why": {
+      "uk": "Ngf6 розвиває не того коня: d7 лишається зайнятим. Після відходу коня з e4 ферзь e2 зв’яже пішака e7 з королем, і той не зможе взяти на d6.",
+      "en": "Ngf6 develops the wrong knight, leaving d7 occupied. Once the knight leaves e4, the queen on e2 pins the e7 pawn to the king, so the pawn cannot capture on d6."
+    },
+    "punishmentIdea": {
+      "uk": "Nd6# — мат. Король заблокований власними фігурами, а e7 не може взяти коня через зв’язку по вертикалі e.",
+      "en": "Nd6# is checkmate. The king is boxed in by its own pieces, and the e7 pawn cannot capture the knight because it is pinned on the e-file."
+    },
+    "avoidanceIdea": {
+      "uk": "Зіграй Ndf6: на f6 має піти саме кінь із d7. Поле d7 звільняється, і показаного мату немає. Перевір, якого коня розвиваєш.",
+      "en": "Play Ndf6: move the knight from d7 to f6. This clears d7 and avoids the shown mate. Check which knight you are developing."
+    },
+    "payoff": "mate",
+    "materialGain": 0,
+    "sources": [
+      {
+        "title": "Remote Chess Academy — Caro-Kann Defense",
+        "url": "https://chess-teacher.com/caro-kann-defense/"
+      }
+    ]
+  },
+  {
+    "id": "qgd-elephant",
+    "courseId": "qgd",
+    "name": {
+      "uk": "Пастка «Слон»",
+      "en": "Elephant trap"
+    },
+    "setup": [
+      "d4",
+      "d5",
+      "c4",
+      "e6",
+      "Nc3",
+      "Nf6",
+      "Bg5",
+      "Nbd7",
+      "cxd5",
+      "exd5"
+    ],
+    "mistake": "Nxd5",
+    "punish": [
+      "Nxd5",
+      "Bxd8",
+      "Bb4+",
+      "Qd2",
+      "Bxd2+",
+      "Kxd2",
+      "Kxd8"
+    ],
+    "avoid": [
+      "e3",
+      "Be7",
+      "Nf3"
+    ],
+    "why": {
+      "uk": "Nxd5 спирається на зв’язку коня f6 з ферзем. Але зв’язка не забороняє коню ходити: після втрати ферзя чорні мають проміжний шах Bb4+.",
+      "en": "Nxd5 relies on the f6 knight being pinned to the queen. That pin does not prevent the knight from moving: after losing the queen, Black has the intermediate check Bb4+."
+    },
+    "punishmentIdea": {
+      "uk": "Nxd5 допускає Bxd8, але Bb4+ змушує білих закритися ферзем: Qd2. Після Bxd2+ Kxd2 Kxd8 чорні залишаються із зайвою легкою фігурою за пішака.",
+      "en": "Nxd5 allows Bxd8, but Bb4+ forces White to block with Qd2. After Bxd2+ Kxd2 Kxd8, Black has an extra minor piece for a pawn."
+    },
+    "avoidanceIdea": {
+      "uk": "Зіграй e3 й продовжуй розвиток ходом Nf3. Перед взяттям пішака перевір шахи суперника: відносна зв’язка фігури з ферзем не гарантує безпечного взяття.",
+      "en": "Play e3 and continue developing with Nf3. Before taking a pawn, check the opponent’s checks: a relative pin to the queen does not guarantee a safe capture."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "Remote Chess Academy — Queen’s Gambit Traps",
+        "url": "https://chess-teacher.com/queens-gambit-traps/"
+      }
+    ]
+  },
+  {
+    "id": "ruy-lopez-trap",
+    "courseId": "ruy-lopez",
+    "name": {
+      "uk": "Слон у пішаковій клітці",
+      "en": "A bishop in a pawn cage"
+    },
+    "setup": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bb5",
+      "a6",
+      "Ba4",
+      "d6",
+      "d4",
+      "b5",
+      "Bb3",
+      "Nxd4",
+      "Nxd4",
+      "exd4"
+    ],
+    "mistake": "Qxd4",
+    "punish": [
+      "c5",
+      "Qd5",
+      "Be6",
+      "Qc6+",
+      "Bd7",
+      "Qd5",
+      "c4",
+      "Bxc4",
+      "bxc4"
+    ],
+    "avoid": [
+      "Bd5",
+      "Rb8",
+      "Qxd4"
+    ],
+    "why": {
+      "uk": "Негайне Qxd4 дозволяє чорним нападати на ферзя з темпом і закрити слону b3 безпечні виходи пішаками b5 та c5.",
+      "en": "The immediate Qxd4 lets Black gain tempi against the queen and close the b3 bishop’s safe exits with the b5 and c5 pawns."
+    },
+    "punishmentIdea": {
+      "uk": "Після c5 та розвитку слона чорні грають c4 і ловлять слона b3. У показаній гілці Bxc4 bxc4 чорні забирають слона за пішака. Це один навчальний варіант, а не єдина відповідь білих.",
+      "en": "After c5 and developing the bishop, Black plays c4 and traps the b3 bishop. In the shown Bxc4 bxc4 line, Black wins the bishop for a pawn. This is one illustrative line, not White’s only reply."
+    },
+    "avoidanceIdea": {
+      "uk": "Спочатку виведи слона на d5. Тоді Qxd4 повертає пішака, не залишаючи слона в пастці на b3. Перш ніж брати матеріал, перевір шляхи відступу своїх фігур.",
+      "en": "Move the bishop to d5 first. Qxd4 can then recover the pawn without leaving the bishop trapped on b3. Check your pieces’ escape squares before taking material."
+    },
+    "payoff": "material",
+    "materialGain": 1,
+    "sources": [
+      {
+        "title": "NM ChessNetwork — Noah's Ark Trap",
+        "url": "https://www.chess.com/blog/ChessNetwork/chess-traps-1-noahs-ark-trap---ruy-lopez"
+      },
+      {
+        "title": "ChessNetwork — original lesson and move list",
+        "url": "https://www.youtube.com/watch?v=KskXvXxlkCM"
+      }
+    ]
+  },
+  {
+    "id": "sicilian-trap",
+    "courseId": "sicilian",
+    "name": {
+      "uk": "Відволікання захисника h2",
+      "en": "Deflecting the h2 defender"
+    },
+    "setup": [
+      "e4",
+      "c5",
+      "d4",
+      "cxd4",
+      "c3",
+      "dxc3",
+      "Nxc3",
+      "Nc6",
+      "Nf3",
+      "e6",
+      "Bc4",
+      "Qc7",
+      "O-O",
+      "Nf6",
+      "Qe2",
+      "Ng4"
+    ],
+    "mistake": "h3",
+    "punish": [
+      "Nd4",
+      "Nxd4",
+      "Qh2#"
+    ],
+    "avoid": [
+      "Rd1",
+      "Bc5"
+    ],
+    "why": {
+      "uk": "h3 нападає на коня g4, але не усуває загроз проти короля. Кінь f3 захищає h2 і стає мішенню відволікання.",
+      "en": "h3 attacks the g4 knight but does not deal with the threats against the king. The f3 knight defends h2 and becomes a target for deflection."
+    },
+    "punishmentIdea": {
+      "uk": "Nd4 нападає на ферзя e2. Якщо білі відповідають Nxd4, кінь f3 залишає захист h2 й дозволяє Qh2#. Мат у цьому навчальному варіанті залежить від взяття Nxd4.",
+      "en": "Nd4 attacks the queen on e2. If White answers Nxd4, the f3 knight leaves h2 undefended and allows Qh2#. The mate in this illustrative line depends on Nxd4."
+    },
+    "avoidanceIdea": {
+      "uk": "Розвивай туру ходом Rd1 замість h3. Зберігай захисника f3, поки ферзь c7 і кінь g4 націлені на h2. Перед нападом на фігуру перевір загрози королю.",
+      "en": "Develop the rook with Rd1 instead of h3. Keep the f3 defender while the c7 queen and g4 knight target h2. Check threats to your king before chasing a piece."
+    },
+    "payoff": "mate",
+    "materialGain": 0,
+    "sources": [
+      {
+        "title": "GM Grigory Serper — Tactical Patterns Everyone Should Know",
+        "url": "https://www.chess.com/article/view/tactical-patterns-everyone-should-know-the-siberian-trap"
+      }
+    ]
+  },
+  {
+    "id": "english-trap",
+    "courseId": "english",
+    "name": {
+      "uk": "Рентген ферзя на b3",
+      "en": "The queen’s x-ray on b3"
+    },
+    "setup": [
+      "c4",
+      "e5",
+      "Nc3",
+      "Nf6",
+      "Nf3",
+      "Nc6",
+      "g3",
+      "Bb4",
+      "Nd5",
+      "Nxd5",
+      "cxd5"
+    ],
+    "mistake": "e4",
+    "punish": [
+      "dxc6",
+      "exf3",
+      "Qb3",
+      "Qe7",
+      "a3",
+      "dxc6",
+      "axb4"
+    ],
+    "avoid": [
+      "Nd4",
+      "Nxd4",
+      "exd4"
+    ],
+    "why": {
+      "uk": "Після e4 чорні розраховують на обмін коней. Але Qb3 прямо атакує слона b4 й тисне на пішака b7 за ним по тій самій вертикалі.",
+      "en": "After e4, Black expects a knight trade. But Qb3 directly attacks the b4 bishop and x-rays the b7 pawn behind it on the same file."
+    },
+    "punishmentIdea": {
+      "uk": "Спочатку dxc6, потім після exf3 — Qb3. У показаній гілці Qe7 a3 dxc6 axb4 білі виграють слона за пішака. Це навчальне продовження; не всі відповіді чорних вимушені.",
+      "en": "First play dxc6, then answer exf3 with Qb3. In the shown Qe7 a3 dxc6 axb4 line, White wins a bishop for a pawn. This is an illustrative line; Black’s replies are not all forced."
+    },
+    "avoidanceIdea": {
+      "uk": "Відведи коня з c6 на d4. Після Nxd4 exd4 матеріал рівний, і комбінація з dxc6 не виникає. Перевір подвійні мішені перед пішаковим нападом на коня.",
+      "en": "Move the c6 knight to d4. After Nxd4 exd4 material is level and the dxc6 tactic does not arise. Check for double targets before attacking a knight with a pawn."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "GM Igor Smirnov — Tiger's Trap in the English",
+        "url": "https://chess-teacher.com/tigers-trap-in-english-opening/"
+      },
+      {
+        "title": "Remote Chess Academy — Petrosian–Ree original linked PGN",
+        "url": "https://lichess.org/study/embed/N75k7U3j/N2E3PQ59"
+      }
+    ]
+  },
+  {
+    "id": "kings-indian-trap",
+    "courseId": "kings-indian",
+    "name": {
+      "uk": "Повторна вилка на e5",
+      "en": "A second fork on e5"
+    },
+    "setup": [
+      "d4",
+      "Nf6",
+      "c4",
+      "g6",
+      "Nc3",
+      "Bg7",
+      "e4",
+      "d6",
+      "Nf3",
+      "O-O",
+      "Bd3",
+      "Bg4",
+      "h3",
+      "Bxf3",
+      "Qxf3",
+      "Nc6",
+      "Be3",
+      "Nd7"
+    ],
+    "mistake": "Ne2",
+    "punish": [
+      "Nde5",
+      "dxe5",
+      "Nxe5",
+      "Qg3",
+      "Nxd3+",
+      "Kd2",
+      "Nxb2"
+    ],
+    "avoid": [
+      "d5",
+      "Bxc3+",
+      "bxc3",
+      "Nce5",
+      "Qe2"
+    ],
+    "why": {
+      "uk": "Ne2 залишає ферзя f3 і слона d3 на полях для вилки конем із e5. Два чорні коні можуть по черзі потрапити на це поле.",
+      "en": "Ne2 leaves the f3 queen and d3 bishop vulnerable to a knight fork from e5. Black’s two knights can reach that square in turn."
+    },
+    "punishmentIdea": {
+      "uk": "Зіграй Nde5. Після dxe5 другий кінь бере на e5 й повторює вилку. У показаній гілці чорні повертають фігуру ходом Nxd3+ і забирають другого пішака на b2.",
+      "en": "Play Nde5. After dxe5, the other knight recaptures on e5 and repeats the fork. In this line, Black regains the piece with Nxd3+ and captures a second pawn on b2."
+    },
+    "avoidanceIdea": {
+      "uk": "Зіграй d5, змінюючи структуру центру. Після Bxc3+ bxc3 Nce5 ферзь може відійти на e2. Показаної жертви з повторною вилкою вже немає.",
+      "en": "Play d5 to change the central pawn structure. After Bxc3+ bxc3 Nce5, the queen can move to e2. The displayed sacrifice with a repeated fork is avoided."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "GM Igor Smirnov — King's Indian Defense: 5 Best Chess Opening Traps, Trap 1",
+        "url": "https://chess-teacher.com/kings-indian-defense/"
+      }
+    ]
+  },
+  {
+    "id": "nimzo-indian-trap",
+    "courseId": "nimzo-indian",
+    "name": {
+      "uk": "Кінь d7 без захисника",
+      "en": "The undefended d7 knight"
+    },
+    "setup": [
+      "d4",
+      "Nf6",
+      "c4",
+      "e6",
+      "Nc3",
+      "Bb4",
+      "Qc2",
+      "d5",
+      "cxd5",
+      "c5",
+      "dxc5",
+      "Nxd5",
+      "Bd2",
+      "Bxc5",
+      "Nxd5",
+      "Qxd5",
+      "e4",
+      "Qd4",
+      "O-O-O",
+      "Nd7",
+      "Bb5"
+    ],
+    "mistake": "O-O",
+    "punish": [
+      "Bc3",
+      "Qxf2",
+      "Qxf2",
+      "Bxf2",
+      "Bxd7"
+    ],
+    "avoid": [
+      "Be7",
+      "Be3",
+      "Qb4"
+    ],
+    "why": {
+      "uk": "Рокіровка прибирає короля з e8, де він захищав коня d7. Хід Bc3 нападає на ферзя d4 й дозволяє білим виграти цього коня.",
+      "en": "Castling moves the king away from e8, where it defended the d7 knight. Bc3 attacks the queen on d4 and lets White win that knight."
+    },
+    "punishmentIdea": {
+      "uk": "Bc3 нападає на ферзя. У показаній гілці Qxf2 Qxf2 Bxf2 ферзі розмінюються, після чого Bxd7 забирає коня. Білі отримують зайву фігуру за пішака.",
+      "en": "Bc3 attacks the queen. In the shown Qxf2 Qxf2 Bxf2 line, the queens are exchanged and Bxd7 captures the knight. White gains a piece for a pawn."
+    },
+    "avoidanceIdea": {
+      "uk": "Спочатку відведи слона на e7. Після Be3 ферзь має відступ Qb4. Не роби рокіровку автоматично, якщо король ще захищає фігуру.",
+      "en": "Retreat the bishop to e7 first. After Be3, the queen can move to b4. Do not castle automatically when the king is still defending a piece."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "GM Igor Smirnov — Magnus Carlsen Lost in 12 Moves! Original annotated Pelletier–Carlsen PGN",
+        "url": "https://chess-teacher.com/magnus-carlsen-lost-in-12-moves/"
+      }
+    ]
+  },
+  {
+    "id": "grunfeld-trap",
+    "courseId": "grunfeld",
+    "name": {
+      "uk": "Подвійний удар e5",
+      "en": "The double attack with e5"
+    },
+    "setup": [
+      "d4",
+      "Nf6",
+      "c4",
+      "g6",
+      "Nc3",
+      "d5",
+      "Nf3",
+      "Bg7",
+      "Qb3",
+      "dxc4",
+      "Qxc4",
+      "O-O",
+      "e4",
+      "Nc6",
+      "Be2",
+      "Bg4",
+      "d5",
+      "Na5",
+      "Qb4"
+    ],
+    "mistake": "c6",
+    "punish": [
+      "e5",
+      "Qb6",
+      "Qxb6",
+      "axb6",
+      "exf6",
+      "Bxf6"
+    ],
+    "avoid": [
+      "Bxf3",
+      "Bxf3",
+      "c6"
+    ],
+    "why": {
+      "uk": "Після c6 хід e5 атакує коня f6 й відкриває ферзю b4 шлях до слона g4. Відступ коня залишить слона без захисника.",
+      "en": "After c6, e5 attacks the f6 knight and opens the b4 queen’s line to the g4 bishop. Moving the knight would leave the bishop undefended."
+    },
+    "punishmentIdea": {
+      "uk": "Зіграй e5. У показаній гілці Qb6 Qxb6 axb6 білі забирають коня ходом exf6. Після Bxf6 вони мають зайвого коня за пішака.",
+      "en": "Play e5. In the shown Qb6 Qxb6 axb6 line, White takes the knight with exf6. After Bxf6, White has an extra knight for a pawn."
+    },
+    "avoidanceIdea": {
+      "uk": "Спочатку розміняй слона g4 на коня f3: Bxf3. Після Bxf3 та c6 слона на g4 вже немає, тож подвійний удар e5 не працює так само.",
+      "en": "First exchange the g4 bishop for the f3 knight with Bxf3. After Bxf3 and c6 there is no bishop on g4, so the e5 double attack no longer works the same way."
+    },
+    "payoff": "material",
+    "materialGain": 2,
+    "sources": [
+      {
+        "title": "IM Siegfried Baumegger — A Comprehensive Guide to the Grunfeld Defense, the 7...Nc6 variation",
+        "url": "https://www.modern-chess.com/opening/grunfeld-defense/"
+      }
+    ]
+  }
+]

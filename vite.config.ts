@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       name: 'private-preview-cache',
       closeBundle() {
         const path = 'dist-owner-preview/sw.js'
-        writeFileSync(path, readFileSync(path, 'utf8').replace("const RELEASE = 'v53'", "const RELEASE = 'v53-owner'"))
+        writeFileSync(path, readFileSync(path, 'utf8').replace("const RELEASE = 'v54'", "const RELEASE = 'v54-owner'"))
       },
     }] : [])],
     server: { host: true },

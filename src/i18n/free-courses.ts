@@ -12,7 +12,7 @@ const english: Record<string, { name: string; theory: CourseTheory; variants: st
       keySquares: [{ square: 'f7', idea: 'The bishop on c4 attacks this square; only the king initially protects it.' }, { square: 'd5', idea: 'A central break for Black and a square White tries to control.' }, { square: 'e5', idea: 'Black’s central pawn and an early target of the knight on f3.' }, { square: 'f5', idea: 'A possible outpost for White’s knight after Nbd2-f1-g3.' }],
       warning: 'An attack on f7 needs calculation. Watch for a central reply with ...d5.',
     },
-    variants: ['All variations', 'Giuoco Pianissimo', 'Two Knights Defense', 'Giuoco Piano', 'Evans Gambit', 'Hungarian Defense', 'Fried Liver Attack', 'Lolli Attack', 'Traxler Counterattack', 'Max Lange Attack', 'Deutz Gambit'],
+    variants: ['All variations', 'Giuoco Pianissimo', 'Two Knights Defense', 'Giuoco Piano', 'Evans Gambit', 'Hungarian Defense', 'Fried Liver Attack', 'Lolli Attack', 'Traxler Counterattack', 'Max Lange Attack', 'Deutz Gambit', 'Polerio Defense', 'Fritz Variation', 'Ulvestad Variation', 'Evans Gambit Declined', 'Two Knights Defense: 4…Be7'],
   },
   london: {
     name: 'London System',
@@ -218,7 +218,7 @@ const pieces: Record<string, string> = { p: 'pawn', n: 'knight', b: 'bishop', r:
 
 export function contextualMoveExplanation(move: Move, locale: 'uk' | 'en'): string | undefined {
   const uci = `${move.from}${move.to}`
-  if (!['a2a3', 'a7a6', 'b7b5', 'b2b3', 'c8g4', 'c1g5', 'g5h4', 'f8b4'].includes(uci)) return
+  if (!['a2a3', 'a7a6', 'b7b5', 'b2b3', 'c8g4', 'c1g5', 'g5h4', 'f8b4', 'c6d4', 'c7c6'].includes(uci)) return
   const position = new Chess(move.after)
   const uk = locale === 'uk'
   const names: Record<string, string> = { p: 'пішака', n: 'коня', b: 'слона', r: 'туру', q: 'ферзя', k: 'короля' }
@@ -226,6 +226,11 @@ export function contextualMoveExplanation(move: Move, locale: 'uk' | 'en'): stri
     const piece = position.get(square)
     return piece && piece.color !== move.color ? piece : undefined
   }
+  if (uci === 'c6d4') return move.captured ? undefined : uk
+    ? 'Кінь займає центральне поле d4.' : 'The knight occupies the central d4-square.'
+  if (uci === 'c7c6') return new Chess(move.before).isCheck() && enemyAt('b5')?.type === 'b' && enemyAt('d5')?.type === 'p'
+    ? uk ? 'Пішак c6 перекриває шах від слона b5 і атакує пішака d5.' : 'The c6-pawn blocks the check from the b5-bishop and attacks the d5-pawn.'
+    : undefined
   if (uci === 'a7a6' || uci === 'a2a3') {
     const target: Square = uci === 'a7a6' ? 'b5' : 'b4'
     const piece = enemyAt(target)

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { unlink } from 'node:fs/promises'
+import { readFile, unlink } from 'node:fs/promises'
 import { Chess } from 'chess.js'
 import { build } from 'esbuild'
 
@@ -121,6 +121,51 @@ try {
   assert.equal(inaccurateBook[0].label, 'inaccuracy')
   assert.equal(inaccurateBook[0].bookMove, false)
   checks.push('known opening context does not override engine-confirmed mistakes with a book badge')
+
+  const importedGame = new Chess()
+  importedGame.loadPgn(await readFile(new URL('./fixtures/wintr-comparison.pgn', import.meta.url), 'utf8'))
+  assert.equal(importedGame.history().length, 95)
+  assert.ok(importedGame.isCheckmate())
+  const comparisonRecords = fromSan(importedGame.history().join(' '))
+  assert.equal(comparisonRecords.filter((record) => record.color === 'w').length, 48)
+  assert.equal(comparisonRecords.filter((record) => record.color === 'b').length, 47)
+  const g6 = comparisonRecords[15]
+  assert.equal(g6.san, 'g6')
+  // Scores and lines reproduced with the shipped Stockfish 19 on the user's PGN.
+  const comparisonReview = await analyseRecordedGame(comparisonRecords, async (fen) => legalResult(
+    fen,
+    fen === g6.fenBefore ? -102 : fen === g6.fenAfter ? 460 : undefined,
+    fen === g6.fenBefore ? ['c6b4', 'c4b3']
+      : fen === g6.fenAfter ? ['c4d5', 'e6d7', 'd5c6', 'b7c6', 'd2d3', 'f8d6'] : undefined,
+  ))
+  const reviewedG6 = comparisonReview[15]
+  assert.equal(reviewedG6.cpLoss, 358)
+  assert.ok(reviewedG6.winDrop >= 22)
+  assert.equal(reviewedG6.label, 'blunder', 'a severe probability loss must not fall below blunder at the old four-pawn boundary')
+  assert.equal(reviewedG6.bestMoveSan, 'Nb4')
+  assert.equal(reviewedG6.principalVariationFens[0], g6.fenBefore)
+  assert.deepEqual(reviewedG6.consequenceVariationSan, ['Bxd5+', 'Kd7', 'Bxc6+', 'bxc6', 'd3', 'Bd6'])
+  assert.equal(reviewedG6.consequenceVariationFens[0], g6.fenAfter)
+  assert.ok(reviewedG6.mistakeExplanation.en.includes("Black's knight on d5"))
+  for (const item of comparisonReview) {
+    for (const [fen, line, sans] of [
+      [item.fenBefore, item.principalVariationUci, item.principalVariationSan],
+      [item.fenAfter, item.consequenceVariationUci, item.consequenceVariationSan],
+    ]) {
+      const position = new Chess(fen)
+      assert.deepEqual(line.map((uci) => position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }).san), sans)
+    }
+  }
+  const whiteProbabilityLoss = fromSan('e4')
+  for (const bestMove of ['d2d4', 'e2e4']) {
+    const items = await analyseRecordedGame(whiteProbabilityLoss, async (fen) => legalResult(
+      fen, fen === whiteProbabilityLoss[0].fenBefore ? -102 : 460,
+      fen === whiteProbabilityLoss[0].fenBefore ? [bestMove] : undefined,
+    ))
+    assert.ok(items[0].winDrop >= 22)
+    assert.equal(items[0].label, bestMove === 'e2e4' ? 'best' : 'blunder', 'the severity rule must work for White and preserve an engine-best move')
+  }
+  checks.push('95-ply user PGN: both sides counted, g6 knight loss is a blunder, legal pre/post lines, symmetric probability severity and engine-best protection')
 
   let longRecords
   for (let seedStart = 1; seedStart <= 30; seedStart += 1) {

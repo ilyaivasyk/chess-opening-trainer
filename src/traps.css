@@ -1,0 +1,26 @@
+.trap-entry { display: flex; width: 100%; align-items: center; gap: 12px; margin-top: 14px; padding: 16px; border: 1px solid var(--gold); border-radius: 15px; background: rgba(216,182,106,.08); color: var(--cream); text-align: left; }
+.trap-entry > .ui-icon { flex: 0 0 26px; color: var(--gold); }
+.trap-entry > span { flex: 1; }
+.trap-entry strong, .trap-entry small { display: block; }
+.trap-entry small { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.traps-screen h1 { font-size: clamp(20px, 5.2vw, 29px); }
+.trap-opening { margin: 0 0 20px; color: var(--gold); }
+.trap-exercise h2 { font-size: 22px; }
+.trap-selector { display: flex; gap: 8px; overflow-x: auto; }
+.trap-selector button, .trap-controls button { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; color: var(--cream); background: var(--surface); }
+.trap-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 16px 0; }
+.trap-stages button { min-height: 78px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: var(--surface); font-size: 12px; line-height: 1.4; }
+.trap-stages button span { display: block; margin: 0 auto 5px; width: 24px; height: 24px; line-height: 24px; border-radius: 50%; background: rgba(255,255,255,.08); }
+.trap-stages button[aria-current], .trap-selector button[aria-pressed=true] { color: var(--cream); border-color: var(--gold); }
+.trap-stages button[aria-current] span { color: #171c18; background: var(--gold); }
+.trap-instructions { min-height: 122px; margin-bottom: 14px; padding: 15px; border-radius: 14px; background: var(--surface); line-height: 1.55; font-size: 14px; }
+.trap-instructions p { margin: 8px 0 0; color: var(--muted); }
+.trap-controls { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 8px; margin: 12px 0; }
+.trap-controls button { display: flex; align-items: center; justify-content: center; padding: 9px 6px; font-size: 13px; }
+.trap-controls button:disabled { opacity: .4; }
+.trap-note, .trap-line small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.trap-line p { min-height: 44px; margin: 6px 0 14px; line-height: 1.8; font-size: 14px; }
+.trap-line p span { display: inline-block; margin-right: 5px; }
+.trap-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: 20px; }
+.trap-footer button, .trap-footer a { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 0; border: 0; color: var(--muted); background: transparent; font-size: 12px; }
+.trap-footer .ui-icon { width: 16px; height: 16px; }

@@ -11,78 +11,6 @@
   },
   "files": [
     {
-      "group": "pieces",
-      "name": "wK",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wK.svg",
-      "sha256": "e50809e91a15790c8d81d3f199bf569f0eb5a09c472a0415944e8c9e3cfcddd0"
-    },
-    {
-      "group": "pieces",
-      "name": "wQ",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wQ.svg",
-      "sha256": "2395664337bea8f13093858320cce6075d80f8086e6aa47e122ce556262b4d6b"
-    },
-    {
-      "group": "pieces",
-      "name": "wR",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wR.svg",
-      "sha256": "e7fb8605a9318ef50e497a97680e4722d3eabc1e9ab6e4e9f594b8f2ca2022e5"
-    },
-    {
-      "group": "pieces",
-      "name": "wB",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wB.svg",
-      "sha256": "14cd4828240708d4d8431034537e2a5fb662d5054246fef681b172680cae9fcd"
-    },
-    {
-      "group": "pieces",
-      "name": "wN",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wN.svg",
-      "sha256": "adc921896bb6e6547828f2a6eb3d5195dd1b7ac8e8c1d2a9085583e4d4d81b68"
-    },
-    {
-      "group": "pieces",
-      "name": "wP",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/wP.svg",
-      "sha256": "0cf9dfe2f7b3ab11a7fdb13bf350f32e7a6c94e193fc023933e129ec02eeed8d"
-    },
-    {
-      "group": "pieces",
-      "name": "bK",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bK.svg",
-      "sha256": "220d75890b4368f0309bab0be40ac1dac6809508f5e1ecb119d35d225bf01f90"
-    },
-    {
-      "group": "pieces",
-      "name": "bQ",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bQ.svg",
-      "sha256": "0308426c9cfafabdce64600cbe90c193fc6ef7665f072b43d4dc82b5c1047670"
-    },
-    {
-      "group": "pieces",
-      "name": "bR",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bR.svg",
-      "sha256": "ad18856a97edf53281acc40e1e6e4f7021ed01fad380fff7e09e63465b3bb462"
-    },
-    {
-      "group": "pieces",
-      "name": "bB",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bB.svg",
-      "sha256": "f835819861774dcacef7370ed2c23d4022ef6c2b17383a6a79c5f683d105e8b6"
-    },
-    {
-      "group": "pieces",
-      "name": "bN",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bN.svg",
-      "sha256": "acabd5a82666927d850a9eaab6f3766ef196a999dd3c6de0f927a8f12dacd356"
-    },
-    {
-      "group": "pieces",
-      "name": "bP",
-      "url": "https://raw.githubusercontent.com/LexLuengas/chessnut-pieces/2b8eaf14a31edad7e9deb53b1473e1d4857868a9/bP.svg",
-      "sha256": "073fb7b38b2ebe66ee54854fa492da6cc04e6d92bc679c860b77c254fa1d46ce"
-    },
-    {
       "group": "ui",
       "name": "gauge",
       "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/gauge.svg",
@@ -183,6 +111,134 @@
       "name": "feather.txt",
       "url": "https://raw.githubusercontent.com/feathericons/feather/v4.29.2/LICENSE",
       "sha256": "308028e93fcf84972523cdf6e616f73168546b4953895f516d01287f16fe7bee"
+    },
+    {
+      "group": "pieces",
+      "name": "bB",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_bdt45.svg&oldid=1122092772",
+      "fileTimestamp": "2021-12-13T19:07:28Z",
+      "sha1": "da6dd1b5ef629bacebbd2ce26c7d81ba8a205587",
+      "sha256": "ba67da76ce919addc60ecb8b46801def073dd54149b2c038a2d07a16d904d5e4"
+    },
+    {
+      "group": "pieces",
+      "name": "wB",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_blt45.svg&oldid=1122092843",
+      "fileTimestamp": "2022-07-28T15:24:56Z",
+      "sha1": "35dd477dc22636bfcc559a01f75b00369205ffda",
+      "sha256": "1d7beace24d455c923ee80d27125963eaf0287b956c5576dbf790c97ac0b97eb"
+    },
+    {
+      "group": "pieces",
+      "name": "bK",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_kdt45.svg&oldid=1122093852",
+      "fileTimestamp": "2020-12-10T11:39:11Z",
+      "sha1": "b1165ef85a3df6f1af2549ab0af78ab21b540e8a",
+      "sha256": "025eea92e0ef8eb1fd06b1c58d0d112948f08bf66cea6b5d003659569949b41c"
+    },
+    {
+      "group": "pieces",
+      "name": "wK",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_klt45.svg&oldid=1122093902",
+      "fileTimestamp": "2022-09-11T23:42:28Z",
+      "sha1": "2c7569b837971207e40f7148e2b2086aaf8e4bbd",
+      "sha256": "56f55c784843b1ac272b8745d740aa2a3e6c585513ef889978916f88e5d0b70b"
+    },
+    {
+      "group": "pieces",
+      "name": "bN",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_ndt45.svg&oldid=1122094232",
+      "fileTimestamp": "2021-12-13T19:15:07Z",
+      "sha1": "3c79cbbda76bcf1d4e4062cef6dd3b58a250a562",
+      "sha256": "735cc58315b123a56632d4877a6b976c827481fa97bf9a5c8f459ec969bc2549"
+    },
+    {
+      "group": "pieces",
+      "name": "wN",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_nlt45.svg&oldid=1122094287",
+      "fileTimestamp": "2021-12-13T19:17:11Z",
+      "sha1": "3a2253429c0e39863b3f5ecf447209dccecdc337",
+      "sha256": "5486791207156f7ae8b8678187648df45085d726334c2862e73b077dea00641e"
+    },
+    {
+      "group": "pieces",
+      "name": "bP",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_pdt45.svg&oldid=1030603507",
+      "fileTimestamp": "2020-12-11T12:44:02Z",
+      "sha1": "0a6d2f3dc6327a02ca591bc489d701fbff228138",
+      "sha256": "4413bf7c18a341f9723d97e6f92c985e30b6167b037e80842cea59b7541bb074"
+    },
+    {
+      "group": "pieces",
+      "name": "wP",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_plt45.svg&oldid=1218934628",
+      "fileTimestamp": "2020-12-11T12:45:42Z",
+      "sha1": "09d59e2770fcee23722ac53b26e875f76d2c1eb1",
+      "sha256": "cc7de30708dcec8f4d593a89d10893d5f9c063682039a1c441e86c44cf2096db"
+    },
+    {
+      "group": "pieces",
+      "name": "bQ",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_qdt45.svg&oldid=997858038",
+      "fileTimestamp": "2021-04-26T22:46:36Z",
+      "sha1": "ed72e75b7bdbf880a3c9bee053c8786cfab8bdb9",
+      "sha256": "70191a3fbc729ef629661e2419a66ab8024c49277aab8ccae3a5ef61372ab802"
+    },
+    {
+      "group": "pieces",
+      "name": "wQ",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_qlt45.svg&oldid=1122094769",
+      "fileTimestamp": "2021-04-26T22:48:20Z",
+      "sha1": "e638eb28ec25007b9f8fac8476bdf6ae1fc5a0ee",
+      "sha256": "b72b864e2a5b6c8f8afb7f260130c10e649ff063f4ef58190c00a35c56364327"
+    },
+    {
+      "group": "pieces",
+      "name": "bR",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_rdt45.svg&oldid=997857576",
+      "fileTimestamp": "2021-12-13T19:15:55Z",
+      "sha1": "bd0e866f1e6da8e3d6f9c0b356b60fc58391aff6",
+      "sha256": "6abf617a9e26902e0734d85897c9ca55e29d7be2928142aa21032c38967e34ba"
+    },
+    {
+      "group": "pieces",
+      "name": "wR",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg",
+      "descriptionUrl": "https://commons.wikimedia.org/w/index.php?title=File:Chess_rlt45.svg&oldid=1122094886",
+      "fileTimestamp": "2021-12-13T19:16:41Z",
+      "sha1": "126b7779885b87e87acc713474587732711bc8d3",
+      "sha256": "4d42ab45afd862c704eb9b35317102d453a7a6b9b71d40f18958c8eadc829e4b"
+    },
+    {
+      "group": "ui",
+      "name": "thumbs-up",
+      "url": "https://raw.githubusercontent.com/lucide-icons/lucide/f12b0de177fbc2a6795e99be065887e72b237123/icons/thumbs-up.svg",
+      "sha256": "f66a57d3b8491f866e7da9375c04b9b7627a4ed898fbfe1a0a331dc12b16fbd8"
+    },
+    {
+      "group": "license",
+      "name": "cburnett.txt",
+      "url": "https://commons.wikimedia.org/w/index.php?title=File:Chess_nlt45.svg&oldid=1122094287",
+      "notice": "Author-selected BSD notice transcribed with attribution and source header.",
+      "sha256": "44cd1f8f23b7185f02239087576e3b201cf34a741cfa8cf3cb5a977dfc7ad670"
     }
-  ]
+  ],
+  "cburnett": {
+    "license": "BSD-3-Clause",
+    "author": "Cburnett",
+    "authorUrl": "https://commons.wikimedia.org/wiki/User:Cburnett",
+    "licenseChoice": "BSD alternative selected from the original author’s GFDL/BSD/GPL offer on every file description.",
+    "changes": "Original SVG bytes retained; CSS display scaling and result rotation only."
+  }
 }

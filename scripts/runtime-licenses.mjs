@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const projectRoot = fileURLToPath(new URL('../', import.meta.url))
 const fairyFiles = ['worker.js', 'fairy-stockfish.js', 'fairy-stockfish.wasm', 'SOURCE.txt', 'SOURCE.md', 'COPYING.txt', 'AUTHORS', 'fairy-source.tar.gz', 'single-worker.patch', 'browser_main.cpp', 'Makefile.browser']
 const soundFiles = ['move.wav', 'capture.wav', 'SOURCE.txt', 'LICENSE.txt', 'KENNEY-LICENSE.txt', 'convert.mjs', 'decoder-package.json', 'decoder-lock.json', 'source/impactWood_light_000.ogg', 'source/impactWood_medium_000.ogg']
-const iconLicenseFiles = ['chessnut.txt', 'chessnut-copyright.txt', 'lucide.txt', 'feather.txt', 'ready-icons-source.json']
+const iconLicenseFiles = ['cburnett.txt', 'chessnut.txt', 'chessnut-copyright.txt', 'lucide.txt', 'feather.txt', 'ready-icons-source.json']
 
 export function runtimeLicenses() {
   const lock = JSON.parse(readFileSync(resolve(projectRoot, 'package-lock.json'), 'utf8'))
@@ -31,7 +31,7 @@ export function runtimeLicenses() {
     const raw = group === 'license' ? readFileSync(resolve(projectRoot, 'public/licenses', name)) : icons[group][name]
     assert.equal(createHash('sha256').update(raw).digest('hex'), sha256, `${group}/${name}: ready icon bytes differ from pinned upstream`)
   }
-  for (const name of iconLicenseFiles) notices.push(`\n=== Chessnut (Apache-2.0) / Lucide (ISC + Feather MIT): ${name} ===\n\n${readFileSync(resolve(projectRoot, 'public/licenses', name), 'utf8').trim()}\n`)
+  for (const name of iconLicenseFiles) notices.push(`\n=== Cburnett (BSD-3-Clause) / retained Chessnut notices (Apache-2.0) / Lucide (ISC + Feather MIT): ${name} ===\n\n${readFileSync(resolve(projectRoot, 'public/licenses', name), 'utf8').trim()}\n`)
   const soundSource = readFileSync(resolve(projectRoot, 'public/sounds/classic/SOURCE.txt'), 'utf8')
   const soundHashes = [...soundSource.matchAll(/^([a-f0-9]{64})  ([A-Za-z0-9_./-]+)$/gm)]
   assert.deepEqual(soundHashes.map((match) => match[2]).sort(), soundFiles.filter((name) => name !== 'SOURCE.txt').sort(), 'Kenney sound/source inventory is incomplete')

@@ -1,6 +1,6 @@
 export const BOARD_THEMES = {
   classic: { light: '#d8cfb6', dark: '#6f8b7e' },
-  walnut: { light: '#ead9b5', dark: '#986d4e' },
+  walnut: { light: '#f0d9b5', dark: '#b58863' },
   blue: { light: '#dee8ed', dark: '#5c7d96' },
 } as const
 

@@ -1,9 +1,9 @@
-const RELEASE = 'v53'
+const RELEASE = 'v54'
 const CACHE_PREFIX = `debut-offline-${self.registration.scope}-${RELEASE.endsWith('-owner') ? 'owner' : 'public'}-`
 const CACHE = `${CACHE_PREFIX}${RELEASE}`
 const CORE = [
   './privacy.html', './THIRD_PARTY_LICENSES.txt', './licenses/brilliant-chess.txt', './manifest.webmanifest?v=29',
-  './licenses/chessnut.txt', './licenses/chessnut-copyright.txt', './licenses/lucide.txt', './licenses/feather.txt', './licenses/ready-icons-source.json',
+  './licenses/cburnett.txt', './licenses/chessnut.txt', './licenses/chessnut-copyright.txt', './licenses/lucide.txt', './licenses/feather.txt', './licenses/ready-icons-source.json',
   './icon-192-v4.png', './icon-512-v4.png', './apple-touch-icon-v4.png',
   './stockfish/stockfish-19-lite-single.js',
   './stockfish/stockfish-19-lite-single.wasm',
